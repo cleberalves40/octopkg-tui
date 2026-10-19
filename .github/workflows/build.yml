@@ -1,0 +1,78 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  # Linux: compila contra o FTXUI 6.1.9 (a versão mais antiga suportada, a do
+  # FreeBSD/aarch64) e roda os testes que não precisam do pkg(8), também com
+  # AddressSanitizer e UBSan.
+  build-linux:
+    name: Build (Ubuntu, FTXUI 6.1.9)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Check version consistency
+      run: |
+        cmake_ver=$(sed -n 's/^project(octopkg_tui VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+        echo "CMakeLists.txt: $cmake_ver"
+        test -n "$cmake_ver"
+        grep -q "^## \[$cmake_ver\]" CHANGELOG.md
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build clang catch2
+
+    - name: Build and test
+      run: |
+        cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ \
+          -DOCTOPKG_TUI_BUILD_TESTS=ON -DOCTOPKG_TUI_FETCH_FTXUI=ON
+        cmake --build build
+        ctest --test-dir build --output-on-failure
+
+    - name: Test with ASan + UBSan
+      env:
+        ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+        UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+      run: |
+        cmake -B build-asan -S . -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++ \
+          -DOCTOPKG_TUI_BUILD_TESTS=ON -DOCTOPKG_TUI_FETCH_FTXUI=ON \
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+        cmake --build build-asan
+        ctest --test-dir build-asan --output-on-failure
+
+  # Arquiteturas Tier 1 do FreeBSD (amd64 e aarch64) nas releases mais novas
+  # das séries suportadas, como no bectl-tui. Cada job compila com o Clang do
+  # sistema e o FTXUI do pkg e executa tests/freebsd-e2e.sh (testes, integração
+  # contra o pkg(8) real e a interface num pseudo-terminal).
+  freebsd:
+    name: FreeBSD ${{ matrix.release }} / ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { release: "14.5", arch: "",        label: "amd64" }
+          - { release: "14.5", arch: "aarch64", label: "aarch64" }
+          - { release: "15.1", arch: "",        label: "amd64" }
+          - { release: "15.1", arch: "aarch64", label: "aarch64" }
+
+    steps:
+    - uses: actions/checkout@v5
+
+    # aarch64 roda emulado no runner x86_64, como a action recomenda.
+    - name: Build and test
+      uses: vmactions/freebsd-vm@v1
+      with:
+        release: ${{ matrix.release }}
+        arch: ${{ matrix.arch }}
+        run: sh ci/freebsd-ci.sh

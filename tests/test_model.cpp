@@ -1,0 +1,134 @@
+// Modelo da lista: filtro, ordenação, seleção e rolagem.
+
+#include "listmodel.h"
+
+#include <catch2/catch_test_macros.hpp>
+
+using model::SortSpec;
+using octo::Status;
+
+namespace {
+
+octo::Package pkg(const std::string &name, const std::string &version, std::int64_t size, std::int64_t when,
+                  Status status)
+{
+    octo::Package p;
+    p.name = name;
+    p.version = version;
+    p.size = size;
+    p.installedOn = when;
+    p.status = status;
+    p.installed = status != Status::NotInstalled;
+    return p;
+}
+
+std::vector<octo::Package> sample()
+{
+    // Na ordem do pkg.
+    return {
+        pkg("zsh", "5.9", 9000000, 300, Status::Installed),
+        pkg("Curl", "8.10.0", 4000000, 100, Status::Outdated),
+        pkg("pkg", "2.3.1", 25000000, 200, Status::Locked),
+        pkg("vim", "9.1.0", 40000000, 0, Status::NotInstalled),
+    };
+}
+
+using Names = std::vector<std::string>;
+
+Names names(const std::vector<octo::Package> &all, const std::vector<int> &rows)
+{
+    Names out;
+    for (int i : rows)
+        out.push_back(all[static_cast<size_t>(i)].name);
+    return out;
+}
+
+Names sorted(SortSpec sort, const std::string &filter = std::string())
+{
+    const auto all = sample();
+    return names(all, model::visibleRows(all, filter, sort));
+}
+
+} // namespace
+
+TEST_CASE("sem ordenação, mantém a ordem do pkg", "[model]")
+{
+    CHECK(sorted({-1, true}) == Names{"zsh", "Curl", "pkg", "vim"});
+}
+
+TEST_CASE("ordem padrão é pelo nome, sem diferenciar maiúsculas", "[model]")
+{
+    CHECK(SortSpec{}.column == model::Name);
+    CHECK(sorted({}) == Names{"Curl", "pkg", "vim", "zsh"});
+    CHECK(sorted({model::Name, false}) == Names{"zsh", "vim", "pkg", "Curl"});
+}
+
+TEST_CASE("filtro pelo nome, sem diferenciar maiúsculas", "[model]")
+{
+    CHECK(sorted({-1, true}, "CU") == Names{"Curl"});
+    CHECK(sorted({-1, true}, "s") == Names{"zsh"});
+    CHECK(sorted({-1, true}, "nada").empty());
+}
+
+TEST_CASE("tamanho, data e estado", "[model]")
+{
+    CHECK(sorted({model::Size, true}) == Names{"Curl", "zsh", "pkg", "vim"});
+    CHECK(sorted({model::InstalledOn, false}) == Names{"zsh", "pkg", "Curl", "vim"});
+    // Ordem do PackageStatus do OctoPkg: bloqueado, instalado, não instalado, desatualizado.
+    CHECK(sorted({model::StateIcon, true}) == Names{"pkg", "zsh", "vim", "Curl"});
+}
+
+TEST_CASE("versões comparam por partes numéricas", "[model]")
+{
+    std::vector<octo::Package> all{pkg("a", "1.10", 0, 0, Status::Installed), pkg("b", "1.9", 0, 0, Status::Installed),
+                                   pkg("c", "1.9_1", 0, 0, Status::Installed),
+                                   pkg("d", "1.9a", 0, 0, Status::Installed),
+                                   pkg("e", "01.2", 0, 0, Status::Installed)};
+    CHECK(names(all, model::visibleRows(all, "", {model::Version, true})) == Names{"e", "b", "d", "c", "a"});
+}
+
+TEST_CASE("clique no cabeçalho: crescente, decrescente, sem ordem", "[model]")
+{
+    SortSpec s{-1, true};
+    s = model::nextOnHeaderClick(s, model::Size);
+    CHECK(s == SortSpec{model::Size, true});
+    s = model::nextOnHeaderClick(s, model::Size);
+    CHECK(s == SortSpec{model::Size, false});
+    s = model::nextOnHeaderClick(s, model::Size);
+    CHECK(s == SortSpec{-1, true});
+    CHECK(model::nextOnHeaderClick({model::Name, false}, model::Version) == SortSpec{model::Version, true});
+}
+
+TEST_CASE("seleção acompanha o pacote", "[model]")
+{
+    const auto all = sample();
+    const auto rows = model::visibleRows(all, "", {});
+    CHECK(model::rowToSelect(all, rows, "vim") == 2);
+    CHECK(model::rowToSelect(all, rows, "sumiu") == 0);
+    CHECK(model::rowToSelect(all, {}, "vim") == -1);
+}
+
+TEST_CASE("janela da tabela segue a seleção", "[model]")
+{
+    CHECK(model::scrollOffset(0, 0, 10, 100) == 0);
+    CHECK(model::scrollOffset(9, 0, 10, 100) == 0);
+    CHECK(model::scrollOffset(10, 0, 10, 100) == 1);
+    CHECK(model::scrollOffset(50, 0, 10, 100) == 41);
+    CHECK(model::scrollOffset(45, 41, 10, 100) == 41);   // dentro da janela: não rola
+    CHECK(model::scrollOffset(5, 41, 10, 100) == 5);
+    CHECK(model::scrollOffset(99, 0, 10, 100) == 90);
+    CHECK(model::scrollOffset(3, 90, 10, 5) == 0);       // a lista encolheu
+    CHECK(model::scrollOffset(-1, 7, 10, 0) == 0);
+}
+
+TEST_CASE("ordena 40 mil pacotes", "[model][performance]")
+{
+    std::vector<octo::Package> all;
+    for (int i = 0; i < 40000; ++i)
+        all.push_back(pkg("pkg" + std::to_string((i * 7919) % 40000), "1." + std::to_string(i % 97), i, i,
+                          Status::NotInstalled));
+    const auto rows = model::visibleRows(all, "", {model::Name, true});
+    REQUIRE(rows.size() == all.size());
+    CHECK(all[static_cast<size_t>(rows.front())].name == "pkg0");
+    CHECK(model::visibleRows(all, "pkg3999", {model::Version, false}).size() == 11);
+}
