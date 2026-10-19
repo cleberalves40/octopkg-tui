@@ -102,6 +102,7 @@ private:
     bool m_contentFocused = false;
     int m_contentScroll = 0;
     bool m_filterMode = false;
+    bool m_started = false;                    // primeira listagem já disparada
     bool m_sortChooser = false;
     int m_sortChooserIndex = 0;
 

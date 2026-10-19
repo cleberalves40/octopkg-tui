@@ -106,6 +106,7 @@ o resultado não depende do alinhamento das colunas nem da versão do pkg.
 ```sh
 cmake -B build -S . -DOCTOPKG_TUI_BUILD_TESTS=ON && cmake --build build && ctest --test-dir build
 sh tests/freebsd-e2e.sh build    # no FreeBSD: integração com o pkg real e a interface
+sh tests/tui-smoke.sh build      # a interface num pseudo-terminal, com um pkg falso
 ```
 
 - `test_core`: leitura da saída do pkg (incluindo a de `pkg upgrade -n`), os estados
@@ -114,6 +115,8 @@ sh tests/freebsd-e2e.sh build    # no FreeBSD: integração com o pkg real e a i
 - `test_model`: filtro, ordenação, seleção e rolagem, com 40 mil pacotes.
 - `test_view`: desenha a tela em texto e dirige a interface com eventos de teclado.
 - `test_integration`: contra o `pkg(8)` real, só leitura.
+- `tests/tui-smoke.sh`: a interface num pseudo-terminal com um pkg falso (lista,
+  detalhes e saída); roda também no Ubuntu, contra o FTXUI 6.1.9.
 
 O CI roda no Ubuntu (com ASan e UBSan) e no FreeBSD 14.5 e 15.1, em amd64 e aarch64,
 incluindo a interface num pseudo-terminal.
