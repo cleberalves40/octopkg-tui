@@ -480,6 +480,13 @@ int App::run()
     m_input = Input(&m_filter, i18n::tr("Filter by name…"), option);
 
     auto renderer = Renderer(m_input, [this] {
+        // A primeira listagem parte da primeira renderização, já dentro do
+        // laço: no FTXUI 6, uma tarefa enviada com Post() antes de Loop() é
+        // descartada, e a lista nunca aparecia.
+        if (!m_started) {
+            m_started = true;
+            refresh();
+        }
         const ViewState state = viewState();
         Element filter = m_filterMode ? m_input->Render()
                                       : (m_filter.empty() ? text(i18n::tr("Filter by name…")) | dim
@@ -490,7 +497,6 @@ int App::run()
     });
     auto root = CatchEvent(renderer, [this](Event event) { return handleEvent(event); });
 
-    screen.Post([this] { refresh(); });
     screen.Loop(root);
 
     if (m_worker.joinable())

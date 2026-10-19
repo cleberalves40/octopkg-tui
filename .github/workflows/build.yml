@@ -37,6 +37,11 @@ jobs:
         cmake --build build
         ctest --test-dir build --output-on-failure
 
+    # A interface num pseudo-terminal, com o FTXUI 6.1.9: pega problemas que
+    # só aparecem com o laço de eventos rodando.
+    - name: Interface smoke test
+      run: sh tests/tui-smoke.sh build
+
     - name: Test with ASan + UBSan
       env:
         ASAN_OPTIONS: detect_leaks=1:halt_on_error=1

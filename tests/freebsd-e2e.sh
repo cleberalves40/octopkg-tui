@@ -13,6 +13,12 @@ build=$(cd "${1:-build}" && pwd)
 
 step() { echo "== $*"; }
 fail() { echo "FAIL: $*" >&2; exit 1; }
+# Falha da interface: mostra o fim do que foi desenhado, para o diagnóstico.
+uifail() {
+	echo "-- fim da tela ($1):" >&2
+	tail -c 6000 "$work/$1.txt" | tr -s ' ' >&2
+	fail "$2"
+}
 
 for t in test_core test_model test_view; do
 	step "$t"
@@ -52,8 +58,8 @@ ui() {
 		>/dev/null 2>&1
 	rc=$?
 	set -e
-	[ "$rc" -eq 0 ] || fail "octopkg-tui ($name) terminou com status $rc"
 	plain "$work/$name.raw" >"$work/$name.txt"
+	[ "$rc" -eq 0 ] || uifail "$name" "octopkg-tui ($name) terminou com status $rc"
 }
 
 count=$($pkgbin query -a %n | wc -l | tr -d ' ')
@@ -62,12 +68,12 @@ count=$($pkgbin query -a %n | wc -l | tr -d ' ')
 step "interface: instalados (pseudo-terminal)"
 ui installed "Origin:"
 for text in "OctoPkg" "Installed packages" "$count package(s)" "Origin:" "Repository:"; do
-	grep -aq "$text" "$work/installed.txt" || fail "a tela (instalados) não mostrou: $text"
+	grep -aq "$text" "$work/installed.txt" || uifail installed "a tela (instalados) não mostrou: $text"
 done
 
 step "interface: repositório (pseudo-terminal)"
 ui remote "@ Repository]" --remote
-grep -aq "@ Repository]" "$work/remote.txt" || fail "a tela (repositório) não mostrou a visão Repositório"
+grep -aq "@ Repository]" "$work/remote.txt" || uifail remote "a tela (repositório) não mostrou a visão Repositório"
 
 "$build/octopkg-tui" --version
 
