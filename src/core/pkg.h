@@ -8,6 +8,8 @@
 #define OCTOPKG_TUI_PKG_H
 
 #include <cstdint>
+#include <ctime>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -61,6 +63,29 @@ struct Details {
     bool filesTruncated = false;
 };
 
+/**
+ * Prévia de uma transação: a saída de "pkg install -n", "pkg remove -n" ou
+ * "pkg upgrade -n", como o Package::getTargetUpgradeList e o
+ * getTargetRemovalList do OctoPkg a leem.
+ */
+struct TransactionPreview {
+    struct Section {
+        std::string action;              // INSTALLED, UPGRADED, REINSTALLED, DOWNGRADED, REMOVED...
+        std::vector<std::string> items;  // como o pkg as imprime: "curl: 8.9.1 -> 8.10.0"
+    };
+    std::vector<Section> sections;
+    std::string downloadSize;            // "3 MiB", de "3 MiB to be downloaded."
+    std::string spaceChange;             // "The operation will free 22 KiB."
+
+    int count() const;
+    /** Itens das seções de action (vazio: todas as que não são REMOVED). */
+    std::vector<std::string> items(const std::string &action) const;
+    std::vector<std::string> removed() const { return items("REMOVED"); }
+};
+
+/** Função que recebe a saída de uma operação à medida que ela roda. */
+using OutputFn = std::function<void(const std::string &chunk)>;
+
 // --- Leitura da saída (funções puras, testadas sem o pkg) ---
 
 /** Linhas de "pkg query -a" com o formato de Manager::listInstalled(). */
@@ -84,6 +109,10 @@ void applyUpgrades(std::vector<Package> &installed, const std::map<std::string, 
  */
 std::vector<Package> mergeRemote(const std::vector<Package> &remote, const std::vector<Package> &installed);
 
+TransactionPreview parseTransaction(const std::string &output);
+/** Nome do pacote num item da prévia ("curl: 8.9.1 -> 8.10.0" → "curl"; "py311-x-1.0 [r]" → "py311-x"). */
+std::string itemName(const std::string &item);
+
 /** Tamanho legível, como o Package::kbytesToSize do OctoPkg ("12.34 MiB"). */
 std::string formatSize(std::int64_t bytes);
 /** Data e hora local "AAAA-MM-DD HH:MM"; vazio para 0. */
@@ -95,11 +124,22 @@ std::string formatTime(std::int64_t unixTime);
  */
 bool validPackageName(const std::string &name);
 
+/** Pacotes que o OctoPkg não deixa remover (Package::isForbidden). */
+bool isForbidden(const std::string &name);
+/** Nome de Boot Environment do OctoPkg para uma transação: "AAMMDD-hhmmss". */
+std::string bootEnvironmentName(std::time_t when);
+
 class Manager
 {
 public:
-    /** pkgPath: executável no lugar do pkg(8); vazio: /usr/local/sbin/pkg ou o do PATH. */
-    explicit Manager(std::string pkgPath = std::string());
+    /**
+     * pkgPath: executável no lugar do pkg(8); vazio: /usr/local/sbin/pkg ou o
+     * do PATH. elevator: comando que eleva privilégios nas operações ("doas",
+     * "sudo"), ou vazio para executá-las diretamente (como root). bectlPath:
+     * o bectl(8) dos Boot Environments; vazio: /sbin/bectl.
+     */
+    explicit Manager(std::string pkgPath = std::string(), std::string elevator = std::string(),
+                     std::string bectlPath = std::string());
 
     std::vector<Package> listInstalled() const;
     std::vector<Package> listRemote() const;
@@ -112,15 +152,42 @@ public:
     /** pkg -v */
     std::string version() const;
 
+    // --- Prévias, sem privilégios (dry-run, sem atualizar o catálogo) ---
+    TransactionPreview previewInstall(const std::vector<std::string> &names) const;
+    TransactionPreview previewRemove(const std::vector<std::string> &names) const;
+    TransactionPreview previewUpgrade() const;
+
+    // --- Operações, com elevação; os comandos são os do OctoPkg ---
+    void install(const std::vector<std::string> &names, const OutputFn &out = nullptr) const;   // install -f -y
+    void remove(const std::vector<std::string> &names, const OutputFn &out = nullptr) const;    // remove -R -y
+    void upgrade(const OutputFn &out = nullptr) const;                                          // upgrade -y
+    void update(const OutputFn &out = nullptr) const;                                           // update -f
+    void clean(const OutputFn &out = nullptr) const;                                            // clean -a -y
+    void lock(const std::string &name, const OutputFn &out = nullptr) const;                    // lock -y
+    void unlock(const std::string &name, const OutputFn &out = nullptr) const;                  // unlock -y
+    /** bectl create nome: o Boot Environment antes da transação, como no OctoPkg. */
+    void createBootEnvironment(const std::string &name, const OutputFn &out = nullptr) const;
+    /** O sistema usa Boot Environments ("bectl check")? */
+    bool bootEnvironmentsAvailable() const;
+
+    /** Linha de comando de uma operação, para a aba Saída ("doas pkg install -f -y curl"). */
+    std::string commandLine(const std::vector<std::string> &args, bool bectl = false) const;
+
     const std::string &pkgPath() const { return m_pkgPath; }
+    const std::string &elevator() const { return m_elevator; }
+    const std::string &bectlPath() const { return m_bectlPath; }
 
     /** Limite da aba Arquivos, como no OctoPkg (2 MiB de saída). */
     static constexpr std::size_t kMaxFilesOutput = 2097152;
 
 private:
     std::string query(const std::vector<std::string> &args) const;
+    TransactionPreview dryRun(const std::vector<std::string> &args) const;
+    void privileged(const std::vector<std::string> &args, const OutputFn &out, bool bectl = false) const;
 
     std::string m_pkgPath;
+    std::string m_elevator;
+    std::string m_bectlPath;
 };
 
 } // namespace octo

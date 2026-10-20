@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(octopkg_tui VERSION 0.1.0 LANGUAGES CXX)
+project(octopkg_tui VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,7 +18,8 @@ if(NOT ftxui_FOUND)
     endif()
     include(FetchContent)
     FetchContent_Declare(ftxui
-        URL https://github.com/ArthurSonzogni/FTXUI/archive/refs/tags/v6.1.9.tar.gz)
+        URL https://github.com/ArthurSonzogni/FTXUI/archive/refs/tags/v6.1.9.tar.gz
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
     set(FTXUI_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(FTXUI_BUILD_DOCS OFF CACHE BOOL "" FORCE)
     set(FTXUI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -46,11 +47,11 @@ add_library(octopkg_ui STATIC
 )
 target_include_directories(octopkg_ui PUBLIC src/tui)
 target_link_libraries(octopkg_ui PUBLIC octopkg_core ftxui::component ftxui::dom ftxui::screen)
+# Fonte única da versão: project(... VERSION ...); usada no --version e no Sobre.
+target_compile_definitions(octopkg_ui PUBLIC OCTOPKG_TUI_VERSION="${PROJECT_VERSION}")
 
 add_executable(octopkg-tui src/main.cpp)
 target_link_libraries(octopkg-tui PRIVATE octopkg_ui)
-# Fonte única da versão: project(... VERSION ...)
-target_compile_definitions(octopkg-tui PRIVATE OCTOPKG_TUI_VERSION="${PROJECT_VERSION}")
 
 foreach(target octopkg_core octopkg_ui octopkg-tui)
     target_compile_options(${target} PRIVATE

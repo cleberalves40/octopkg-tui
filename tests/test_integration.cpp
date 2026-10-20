@@ -1,10 +1,11 @@
-// Integração contra o pkg(8) real, somente leitura: os mesmos formatos de
-// consulta que a interface usa, no banco de dados e no catálogo do sistema.
+// Integração contra o pkg(8) real: os mesmos formatos de consulta que a
+// interface usa, no banco de dados e no catálogo do sistema, e uma transação
+// de verdade com um pacote pequeno (figlet), que é instalado e removido.
 //
 // tests/freebsd-e2e.sh define OCTOPKG_TEST_PKG com o caminho do pkg; sem a
-// variável, os testes são ignorados. Espera um sistema com o pkg e os pacotes
-// de compilação do projeto instalados (cmake, ninja, catch2, ftxui) e o
-// catálogo do repositório atualizado.
+// variável, os testes são ignorados. Espera root (as operações rodam sem
+// elevador), os pacotes de compilação do projeto instalados (cmake, ninja,
+// catch2, ftxui), o catálogo do repositório atualizado e o figlet ausente.
 
 #include "pkg.h"
 #include "support.h"
@@ -122,4 +123,50 @@ TEST_CASE("lista os repositórios e junta com os instalados", "[integration]")
     CHECK_FALSE(d.installed);
     CHECK(d.installedOn == 0);
     CHECK(d.files.empty());
+}
+
+// Uma sequência só: o Catch2 3 embaralha a ordem dos casos.
+TEST_CASE("instala, bloqueia, desbloqueia e remove um pacote", "[integration][transaction]")
+{
+    REQUIRE_PKG();
+    const std::string name = "figlet";
+    const auto has = [&](const std::vector<octo::Package> &list) {
+        return std::any_of(list.begin(), list.end(), [&](const octo::Package &p) { return p.name == name; });
+    };
+    REQUIRE_FALSE(has(mgr().listInstalled()));
+    std::string out;
+    const octo::OutputFn collect = [&out](const std::string &c) { out += c; };
+
+    const octo::TransactionPreview ins = mgr().previewInstall({name});
+    REQUIRE(ins.count() >= 1);
+    bool listed = false;
+    for (const auto &i : ins.items(""))
+        listed = listed || octo::itemName(i) == name;
+    CHECK(listed);
+
+    mgr().install({name}, collect);
+    CHECK(out.find(name) != std::string::npos);   // a saída do pkg chegou
+    const auto after = mgr().listInstalled();
+    REQUIRE(has(after));
+    CHECK_FALSE(find(after, name).automatic);
+
+    mgr().lock(name);
+    CHECK(find(mgr().listInstalled(), name).locked);
+    mgr().unlock(name);
+    CHECK_FALSE(find(mgr().listInstalled(), name).locked);
+
+    const octo::TransactionPreview rem = mgr().previewRemove({name});
+    REQUIRE(rem.removed().size() >= 1);
+    CHECK(octo::itemName(rem.removed().front()) == name);
+    mgr().remove({name}, collect);
+    CHECK_FALSE(has(mgr().listInstalled()));
+}
+
+TEST_CASE("prévia da atualização, limpeza do cache e Boot Environments", "[integration][transaction]")
+{
+    REQUIRE_PKG();
+    CHECK_NOTHROW(mgr().previewUpgrade());
+    CHECK_NOTHROW(mgr().clean());
+    // A VM de CI pode estar em UFS ou ZFS: só não pode falhar.
+    CHECK_NOTHROW(mgr().bootEnvironmentsAvailable());
 }

@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>   // CHECK_THROWS_WITH
 #include <cstdlib>
+#include <ctime>
 #include <stdexcept>
 
 using octo::Status;
@@ -409,4 +410,213 @@ TEST_CASE("trf substitui os argumentos uma vez", "[i18n]")
     i18n::setLocale("pt_BR");
     CHECK(i18n::trf("%1 package(s) installed.", {"3"}) == "3 pacote(s) instalado(s).");
     i18n::setLocale("en_US");
+}
+
+// --- v0.2.0: transações ---
+
+namespace {
+
+// "pkg install -n" do FreeBSD 15.1 (pkg 2.x), com um conflito removido.
+const char kInstallDryRun[] =
+    "Updating FreeBSD repository catalogue...\n"
+    "FreeBSD repository is up to date.\n"
+    "All repositories are up to date.\n"
+    "Checking integrity... done (1 conflicting)\n"
+    "The following 3 package(s) will be affected (of 0 checked):\n"
+    "\n"
+    "Installed packages to be REMOVED:\n"
+    "\tvim-tiny: 9.1.0\n"
+    "\n"
+    "New packages to be INSTALLED:\n"
+    "\tvim: 9.1.1000 [FreeBSD]\n"
+    "\tlibsodium: 1.0.20 [FreeBSD]\n"
+    "\n"
+    "Number of packages to be removed: 1\n"
+    "Number of packages to be installed: 2\n"
+    "\n"
+    "The operation will require 35 MiB more space.\n"
+    "8 MiB to be downloaded.\n";
+
+// "pkg remove -n -R": quem depende de curl também sai.
+const char kRemoveDryRun[] =
+    "Checking integrity... done (0 conflicting)\n"
+    "Deinstallation has been requested for the following 2 packages (of 0 packages in the universe):\n"
+    "\n"
+    "Installed packages to be REMOVED:\n"
+    "\tcurl: 8.9.1\n"
+    "\tgit: 2.46.0\n"
+    "\n"
+    "Number of packages to be removed: 2\n"
+    "\n"
+    "The operation will free 50 MiB.\n";
+
+// Elevador falso: registra e executa o comando, como o doas faria.
+std::string fakeElevator(const TempDir &dir, const std::string &log)
+{
+    const std::string path = dir.file("doas-falso");
+    writeExecutable(path, "#!/bin/sh\necho \"doas $*\" >> '" + log + "'\nexec \"$@\"\n");
+    return path;
+}
+
+std::string fakeBectl(const TempDir &dir, const std::string &log, int checkStatus, int createStatus = 0)
+{
+    const std::string path = dir.file("bectl-falso");
+    writeExecutable(path, "#!/bin/sh\necho \"bectl $*\" >> '" + log + "'\n"
+                          "[ \"$1\" = check ] && exit " + std::to_string(checkStatus) + "\n"
+                          "[ \"$1\" = create ] && { echo \"bectl: falhou\" >&2; exit " + std::to_string(createStatus) +
+                          "; }\nexit 0\n");
+    return path;
+}
+
+} // namespace
+
+TEST_CASE("lê a prévia de instalar, remover e atualizar", "[parse]")
+{
+    const auto ins = octo::parseTransaction(kInstallDryRun);
+    REQUIRE(ins.sections.size() == 2);
+    CHECK(ins.sections[0].action == "REMOVED");
+    CHECK(ins.removed() == std::vector<std::string>{"vim-tiny: 9.1.0"});
+    CHECK(ins.items("") == std::vector<std::string>{"vim: 9.1.1000 [FreeBSD]", "libsodium: 1.0.20 [FreeBSD]"});
+    CHECK(ins.count() == 3);
+    CHECK(ins.downloadSize == "8 MiB");
+
+    const auto rem = octo::parseTransaction(kRemoveDryRun);
+    CHECK(rem.removed().size() == 2);
+    CHECK(rem.items("").empty());
+    CHECK(rem.spaceChange == "The operation will free 50 MiB.");
+    CHECK(rem.downloadSize.empty());
+
+    const auto up = octo::parseTransaction(kUpgradeDryRun);
+    CHECK(up.items("INSTALLED").size() == 1);
+    CHECK(up.items("UPGRADED").size() == 2);
+    CHECK(up.items("REINSTALLED") == std::vector<std::string>{"python311-3.11.9 [FreeBSD] (options changed)"});
+    CHECK(up.items("").size() == 4);
+    CHECK(up.downloadSize == "3 MiB");
+    CHECK(octo::parseTransaction("Your packages are up to date.\n").count() == 0);
+}
+
+TEST_CASE("nome do pacote nos itens da prévia", "[parse]")
+{
+    CHECK(octo::itemName("curl: 8.9.1 -> 8.10.0 [FreeBSD]") == "curl");
+    CHECK(octo::itemName("vim-tiny: 9.1.0") == "vim-tiny");
+    CHECK(octo::itemName("python311-3.11.9 [FreeBSD] (options changed)") == "python311");
+    CHECK(octo::itemName("py311-pip-24.0") == "py311-pip");
+}
+
+TEST_CASE("pacotes protegidos e nome do Boot Environment", "[validation]")
+{
+    CHECK(octo::isForbidden("pkg"));
+    CHECK(octo::isForbidden("xorg"));
+    CHECK_FALSE(octo::isForbidden("curl"));
+    const std::string be = octo::bootEnvironmentName(std::time(nullptr));
+    REQUIRE(be.size() == 13);   // AAMMDD-hhmmss, como no OctoPkg
+    CHECK(be[6] == '-');
+}
+
+TEST_CASE("prévias como usuário, sem elevação", "[pkg]")
+{
+    i18n::setLocale("en_US");
+    TempDir dir;
+    const std::string log = dir.file("calls.log");
+    std::ofstream(dir.file("install.txt")) << kInstallDryRun;
+    std::ofstream(dir.file("remove.txt")) << kRemoveDryRun;
+    const std::string pkg = fakePkg(dir, log, "case \"$1\" in\n"
+                                              "install) cat '" + dir.file("install.txt") + "'; exit 1 ;;\n"
+                                              "remove) cat '" + dir.file("remove.txt") + "' ;;\n"
+                                              "upgrade) echo 'Your packages are up to date.' ;;\n"
+                                              "esac");
+    octo::Manager mgr(pkg, fakeElevator(dir, log));
+    // Com -n, sair com 1 havendo o que fazer não é erro.
+    CHECK(mgr.previewInstall({"vim"}).count() == 3);
+    CHECK(mgr.previewRemove({"curl"}).removed().size() == 2);
+    CHECK(mgr.previewUpgrade().count() == 0);
+    const auto calls = readLines(log);
+    CHECK(calls == std::vector<std::string>{"install|-n|-f|-U|vim", "remove|-n|-R|curl", "upgrade|-n|-U"});
+    CHECK_THROWS_WITH(mgr.previewInstall({}), "No packages selected.");
+    CHECK_THROWS_WITH(mgr.previewRemove({"-a"}), "Invalid package name: -a");
+}
+
+TEST_CASE("prévia que falha mostra a mensagem do pkg", "[pkg]")
+{
+    i18n::setLocale("en_US");
+    TempDir dir;
+    const std::string log = dir.file("calls.log");
+    octo::Manager mgr(fakePkg(dir, log, "echo \"pkg: No packages available to install matching 'nada'\" >&2; exit 1"));
+    CHECK_THROWS_WITH(mgr.previewInstall({"nada"}), "pkg: No packages available to install matching 'nada'");
+}
+
+TEST_CASE("operações chamam o pkg pelo elevador, com os comandos do OctoPkg", "[pkg]")
+{
+    TempDir dir;
+    const std::string log = dir.file("calls.log");
+    const std::string pkg = fakePkg(dir, log, "echo \"saída de $1\"");
+    octo::Manager mgr(pkg, fakeElevator(dir, log), fakeBectl(dir, log, 0));
+    std::string out;
+    const octo::OutputFn collect = [&out](const std::string &c) { out += c; };
+    mgr.install({"curl", "git"}, collect);
+    mgr.remove({"vim"}, collect);
+    mgr.upgrade(collect);
+    mgr.update(collect);
+    mgr.clean(collect);
+    mgr.lock("curl", collect);
+    mgr.unlock("curl", collect);
+    mgr.createBootEnvironment("261020-101500", collect);
+    CHECK(mgr.bootEnvironmentsAvailable());
+
+    std::vector<std::string> pkgCalls, elevated;
+    for (const auto &c : readLines(log))
+        (startsWith(c, "doas ") ? elevated : pkgCalls).push_back(c);
+    CHECK(pkgCalls == std::vector<std::string>{"install|-f|-y|curl|git", "remove|-R|-y|vim", "upgrade|-y",
+                                               "update|-f", "clean|-a|-y", "lock|-y|curl", "unlock|-y|curl",
+                                               "bectl create 261020-101500", "bectl check"});
+    CHECK(elevated.size() == 8);   // tudo menos o bectl check
+    CHECK(startsWith(elevated[0], "doas " + pkg + " install -f -y curl git"));
+    CHECK(contains(elevated[7], "bectl-falso create 261020-101500"));
+    CHECK(contains(out, "saída de install"));
+    CHECK(contains(out, "saída de clean"));
+    CHECK(mgr.commandLine({"install", "-f", "-y", "curl"}).find(" install -f -y curl") != std::string::npos);
+}
+
+TEST_CASE("operações recusam o que o OctoPkg recusa e repassam erros", "[pkg]")
+{
+    i18n::setLocale("en_US");
+    TempDir dir;
+    const std::string log = dir.file("calls.log");
+    SECTION("pacote protegido e nomes inválidos, sem chamar o pkg")
+    {
+        octo::Manager mgr(fakePkg(dir, log, "exit 0"));
+        CHECK_THROWS_WITH(mgr.remove({"pkg"}), "pkg cannot be removed.");
+        CHECK_THROWS_WITH(mgr.install({"-f"}), "Invalid package name: -f");
+        CHECK_THROWS_WITH(mgr.createBootEnvironment("-x"), "Invalid boot environment name: -x");
+        CHECK_THROWS_WITH(mgr.createBootEnvironment("com espaço"), "Invalid boot environment name: com espaço");
+        CHECK(readLines(log).empty());
+    }
+    SECTION("mensagem do stderr")
+    {
+        octo::Manager mgr(fakePkg(dir, log, "echo 'pkg: Insufficient privileges' >&2; exit 77"));
+        CHECK_THROWS_WITH(mgr.upgrade(), "pkg: Insufficient privileges");
+    }
+    SECTION("elevador ausente")
+    {
+        octo::Manager mgr(fakePkg(dir, log, "exit 0"), "doas-que-nao-existe");
+        CHECK_THROWS_WITH(mgr.clean(),
+                          "'doas-que-nao-existe' not found. Install it (pkg install doas-que-nao-existe) or run "
+                          "octopkg-tui as root.");
+    }
+    SECTION("Boot Environments: bectl check")
+    {
+        CHECK_FALSE(octo::Manager(fakePkg(dir, log, "exit 0"), "", fakeBectl(dir, log, 1)).bootEnvironmentsAvailable());
+        CHECK_FALSE(octo::Manager(fakePkg(dir, log, "exit 0"), "", "/nao/existe/bectl").bootEnvironmentsAvailable());
+    }
+}
+
+TEST_CASE("a saída chega aos poucos", "[process]")
+{
+    std::vector<std::string> chunks;
+    const auto r = octo::runProcess({"/bin/sh", "-c", "echo um; sleep 0.3; echo dois >&2"}, 5000, {},
+                                    [&chunks](const std::string &c) { chunks.push_back(c); });
+    REQUIRE(chunks.size() >= 2);
+    CHECK(chunks.front() == "um\n");
+    CHECK(r.out == "um\n");
+    CHECK(r.err == "dois\n");
 }

@@ -1,6 +1,7 @@
 #ifndef OCTOPKG_TUI_PROCESS_H
 #define OCTOPKG_TUI_PROCESS_H
 
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -18,15 +19,18 @@ struct ProcessResult {
 };
 
 using Environment = std::vector<std::pair<std::string, std::string>>;
+/** Recebe pedaços da saída (stdout e stderr) à medida que chegam. */
+using OutputFn = std::function<void(const std::string &chunk)>;
 
 /**
  * Executa argv sem shell (fork + execvp), capturando stdout e stderr.
  * timeoutMs < 0: sem limite. env: variáveis definidas só no filho, como
  * LC_ALL=C para que a saída do pkg não dependa do idioma. A entrada do
- * filho é /dev/null.
+ * filho é /dev/null: o doas e o sudo leem a senha de /dev/tty. onOutput,
+ * se dado, é chamado na thread de quem chamou, a cada leitura.
  */
 ProcessResult runProcess(const std::vector<std::string> &argv, int timeoutMs,
-                         const Environment &env = {});
+                         const Environment &env = {}, const OutputFn &onOutput = nullptr);
 
 /** Procura um executável no PATH; devolve string vazia se não achar. */
 std::string findExecutable(const std::string &name);

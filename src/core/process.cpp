@@ -60,7 +60,8 @@ std::string findExecutable(const std::string &name)
     return std::string();
 }
 
-ProcessResult runProcess(const std::vector<std::string> &argv, int timeoutMs, const Environment &env)
+ProcessResult runProcess(const std::vector<std::string> &argv, int timeoutMs, const Environment &env,
+                         const OutputFn &onOutput)
 {
     ProcessResult r;
     if (argv.empty()) {
@@ -179,8 +180,11 @@ ProcessResult runProcess(const std::vector<std::string> &argv, int timeoutMs, co
             const ssize_t got = ::read(fds[i].fd, buf, sizeof buf);
             int &fd = fds[i].fd == out[0] ? out[0] : err[0];
             std::string &dest = fds[i].fd == out[0] ? r.out : r.err;
-            if (got > 0)
+            if (got > 0) {
                 dest.append(buf, static_cast<size_t>(got));
+                if (onOutput)
+                    onOutput(std::string(buf, static_cast<size_t>(got)));
+            }
             else if (got == 0 || errno != EINTR)
                 closeFd(fd);
         }

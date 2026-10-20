@@ -18,10 +18,13 @@ struct IconSet {
     const char *newer;
     const char *locked;
     const char *notInstalled;
+    const char *toInstall;      // marcado para instalar (+)
+    const char *toRemove;       // marcado para remover (-)
     const char *installedView;
     const char *remoteView;
     const char *info;
     const char *files;
+    const char *actions;
     const char *output;
     const char *help;
     const char *filter;

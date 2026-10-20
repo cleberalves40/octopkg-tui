@@ -7,6 +7,7 @@
 #include "i18n.h"
 #include "process.h"
 
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -100,6 +101,24 @@ std::vector<std::string> fields(const std::string &line, size_t count)
     }
     return parts;
 }
+
+std::string defaultBectl()
+{
+    return ::access("/sbin/bectl", X_OK) == 0 ? std::string("/sbin/bectl") : findExecutable("bectl");
+}
+
+void requireNames(const std::vector<std::string> &names)
+{
+    if (names.empty())
+        fail(i18n::tr("No packages selected."));
+    for (const auto &n : names)
+        if (!validPackageName(n))
+            fail(i18n::trf("Invalid package name: %1", {n}));
+}
+
+// Mesmas variáveis das consultas, mas com UTF-8: a saída vai para a tela, e
+// nomes de arquivos podem ter acentos.
+const Environment kRunEnv{{"LANG", "C.UTF-8"}, {"LC_MESSAGES", "C"}, {"LC_ALL", "C.UTF-8"}};
 
 std::string defaultPkg()
 {
@@ -203,6 +222,84 @@ Details parseDetails(const std::string &output)
     return d;
 }
 
+int TransactionPreview::count() const
+{
+    int n = 0;
+    for (const auto &sec : sections)
+        n += static_cast<int>(sec.items.size());
+    return n;
+}
+
+std::vector<std::string> TransactionPreview::items(const std::string &action) const
+{
+    std::vector<std::string> out;
+    for (const auto &sec : sections)
+        if (action.empty() ? sec.action != "REMOVED" : sec.action == action)
+            out.insert(out.end(), sec.items.begin(), sec.items.end());
+    return out;
+}
+
+TransactionPreview parseTransaction(const std::string &output)
+{
+    // Seções "<...> packages to be <AÇÃO>:" seguidas de itens com TAB; fora
+    // delas, o tamanho a baixar e a mudança de espaço em disco.
+    TransactionPreview p;
+    TransactionPreview::Section *current = nullptr;
+    for (const auto &line : lines(output)) {
+        const size_t tb = line.find("packages to be ");
+        if (tb != std::string::npos && line.back() == ':') {
+            const size_t start = tb + std::string("packages to be ").size();
+            p.sections.push_back({line.substr(start, line.size() - 1 - start), {}});
+            current = &p.sections.back();
+            continue;
+        }
+        if (line[0] == '\t' && current) {
+            current->items.push_back(trim(line));
+            continue;
+        }
+        current = nullptr;
+        const size_t dl = line.find(" to be downloaded.");
+        if (dl != std::string::npos)
+            p.downloadSize = trim(line.substr(0, dl));
+        else if (line.find("The operation will ") == 0)
+            p.spaceChange = trim(line);
+    }
+    // Seções vazias (o pkg não as imprime, mas por garantia) não contam.
+    std::vector<TransactionPreview::Section> kept;
+    for (auto &sec : p.sections)
+        if (!sec.items.empty())
+            kept.push_back(std::move(sec));
+    p.sections = std::move(kept);
+    return p;
+}
+
+std::string itemName(const std::string &item)
+{
+    // "nome: versão..." (instalar, atualizar, remover) ou "nome-versão [repo]
+    // (motivo)" (reinstalar), como o getTargetRemovalList do OctoPkg separa.
+    const std::string t = trim(item);
+    const size_t colon = t.find(": ");
+    if (colon != std::string::npos)
+        return t.substr(0, colon);
+    const std::string first = t.substr(0, t.find(' '));
+    const size_t dash = first.rfind('-');
+    return dash == std::string::npos || dash == 0 ? first : first.substr(0, dash);
+}
+
+bool isForbidden(const std::string &name)
+{
+    return name == "pkg" || name == "xorg";
+}
+
+std::string bootEnvironmentName(std::time_t when)
+{
+    std::tm tm {};
+    ::localtime_r(&when, &tm);
+    char buf[32];
+    std::strftime(buf, sizeof buf, "%y%m%d-%H%M%S", &tm);
+    return buf;
+}
+
 void applyUpgrades(std::vector<Package> &installed, const std::map<std::string, Upgrade> &upgrades)
 {
     for (auto &p : installed) {
@@ -294,8 +391,10 @@ bool validPackageName(const std::string &name)
     return true;
 }
 
-Manager::Manager(std::string pkgPath)
+Manager::Manager(std::string pkgPath, std::string elevator, std::string bectlPath)
     : m_pkgPath(pkgPath.empty() ? defaultPkg() : std::move(pkgPath))
+    , m_elevator(std::move(elevator))
+    , m_bectlPath(bectlPath.empty() ? defaultBectl() : std::move(bectlPath))
 {
 }
 
@@ -398,6 +497,155 @@ Details Manager::details(const std::string &name, bool installed) const
 std::string Manager::version() const
 {
     return trim(query({"-v"}));
+}
+
+TransactionPreview Manager::dryRun(const std::vector<std::string> &args) const
+{
+    std::vector<std::string> cmd{m_pkgPath};
+    cmd.insert(cmd.end(), args.begin(), args.end());
+    const std::string shown = join(cmd, " ");
+    const ProcessResult r = runProcess(cmd, kTimeoutMs, {{"LANG", "C"}, {"LC_MESSAGES", "C"}, {"LC_ALL", "C"}});
+    if (!r.started)
+        fail(i18n::trf("Failed to start '%1': %2", {shown, r.startError}));
+    if (r.timedOut)
+        fail(i18n::trf("Command timed out (%1 ms): %2", {std::to_string(kTimeoutMs), shown}));
+    if (r.crashed)
+        fail(i18n::trf("Process crashed: %1", {shown}));
+    TransactionPreview p = parseTransaction(r.out);
+    // Com -n, o pkg sai com 1 quando haveria o que fazer: só é erro sem prévia.
+    if (r.status != 0 && !(r.status == 1 && p.count() > 0)) {
+        std::string msg = trim(r.err).empty() ? trim(r.out) : trim(r.err);
+        if (msg.empty())
+            msg = i18n::trf("Command failed with exit code %1", {std::to_string(r.status)});
+        fail(msg);
+    }
+    return p;
+}
+
+TransactionPreview Manager::previewInstall(const std::vector<std::string> &names) const
+{
+    requireNames(names);
+    std::vector<std::string> args{"install", "-n", "-f", "-U"};
+    args.insert(args.end(), names.begin(), names.end());
+    return dryRun(args);
+}
+
+TransactionPreview Manager::previewRemove(const std::vector<std::string> &names) const
+{
+    requireNames(names);
+    std::vector<std::string> args{"remove", "-n", "-R"};
+    args.insert(args.end(), names.begin(), names.end());
+    return dryRun(args);
+}
+
+TransactionPreview Manager::previewUpgrade() const
+{
+    return dryRun({"upgrade", "-n", "-U"});
+}
+
+std::string Manager::commandLine(const std::vector<std::string> &args, bool bectl) const
+{
+    std::vector<std::string> cmd;
+    if (!m_elevator.empty())
+        cmd.push_back(m_elevator);
+    cmd.push_back(bectl ? m_bectlPath : m_pkgPath);
+    cmd.insert(cmd.end(), args.begin(), args.end());
+    return join(cmd, " ");
+}
+
+void Manager::privileged(const std::vector<std::string> &args, const OutputFn &out, bool bectl) const
+{
+    std::vector<std::string> cmd;
+    if (!m_elevator.empty()) {
+        const std::string tool = findExecutable(m_elevator);
+        if (tool.empty())
+            fail(i18n::trf("'%1' not found. Install it (pkg install %1) or run octopkg-tui as root.",
+                           {m_elevator}));
+        cmd.push_back(tool);
+    }
+    cmd.push_back(bectl ? m_bectlPath : m_pkgPath);
+    cmd.insert(cmd.end(), args.begin(), args.end());
+    const std::string shown = commandLine(args, bectl);
+    // Sem limite de tempo: a espera inclui a senha do doas/sudo, e uma
+    // atualização pode baixar centenas de megabytes.
+    const ProcessResult r = runProcess(cmd, -1, kRunEnv, out);
+    if (!r.started)
+        fail(i18n::trf("Failed to start '%1': %2", {shown, r.startError}));
+    if (r.crashed)
+        fail(i18n::trf("Process crashed: %1", {shown}));
+    if (r.status != 0) {
+        std::string msg = trim(r.err);
+        if (msg.empty())
+            msg = i18n::trf("Command failed with exit code %1", {std::to_string(r.status)});
+        fail(msg);
+    }
+}
+
+void Manager::install(const std::vector<std::string> &names, const OutputFn &out) const
+{
+    requireNames(names);
+    std::vector<std::string> args{"install", "-f", "-y"};
+    args.insert(args.end(), names.begin(), names.end());
+    privileged(args, out);
+}
+
+void Manager::remove(const std::vector<std::string> &names, const OutputFn &out) const
+{
+    requireNames(names);
+    for (const auto &n : names)
+        if (isForbidden(n))
+            fail(i18n::trf("%1 cannot be removed.", {n}));
+    std::vector<std::string> args{"remove", "-R", "-y"};
+    args.insert(args.end(), names.begin(), names.end());
+    privileged(args, out);
+}
+
+void Manager::upgrade(const OutputFn &out) const
+{
+    privileged({"upgrade", "-y"}, out);
+}
+
+void Manager::update(const OutputFn &out) const
+{
+    privileged({"update", "-f"}, out);
+}
+
+void Manager::clean(const OutputFn &out) const
+{
+    privileged({"clean", "-a", "-y"}, out);
+}
+
+void Manager::lock(const std::string &name, const OutputFn &out) const
+{
+    requireNames({name});
+    privileged({"lock", "-y", name}, out);
+}
+
+void Manager::unlock(const std::string &name, const OutputFn &out) const
+{
+    requireNames({name});
+    privileged({"unlock", "-y", name}, out);
+}
+
+void Manager::createBootEnvironment(const std::string &name, const OutputFn &out) const
+{
+    // Regras do libbe, como no bectl-tui: letras, dígitos e "_-.:", sem "-" inicial.
+    bool ok = !name.empty() && name[0] != '-' && name.size() <= 255;
+    for (unsigned char c : name)
+        ok = ok && (std::isalnum(c) || c == '_' || c == '-' || c == '.' || c == ':');
+    if (!ok)
+        fail(i18n::trf("Invalid boot environment name: %1", {name}));
+    privileged({"create", name}, out, true);
+}
+
+bool Manager::bootEnvironmentsAvailable() const
+{
+    // Como o UnixCommand::isRootOnZFS do OctoPkg, mas com "bectl check": sai
+    // com 0 quando o sistema usa Boot Environments. Não precisa de root.
+    if (m_bectlPath.empty() || ::access(m_bectlPath.c_str(), X_OK) != 0)
+        return false;
+    const ProcessResult r = runProcess({m_bectlPath, "check"}, 10000);
+    return r.started && !r.timedOut && r.status == 0;
 }
 
 } // namespace octo

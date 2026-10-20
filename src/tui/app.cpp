@@ -1,12 +1,15 @@
 #include "app.h"
 #include "i18n.h"
+#include "process.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <ctime>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/mouse.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/screen/terminal.hpp>
+#include <unistd.h>
 
 using namespace ftxui;
 
@@ -15,20 +18,69 @@ namespace tui {
 namespace {
 
 // Teclas que o FTXUI entrega como sequência crua.
+const std::string kCtrlE = "\x05";
+const std::string kCtrlK = "\x0b";
 const std::string kCtrlL = "\x0c";
 const std::string kCtrlP = "\x10";
 const std::string kCtrlQ = "\x11";
 const std::string kCtrlR = "\x12";
+const std::string kCtrlU = "\x15";
+const std::string kAltA = "\x1b" "a";
+const std::string kAltC = "\x1b" "c";
 const std::string kAltI = "\x1b" "i";
+const std::string kAltJ = "\x1b" "j";
+const std::string kAltM = "\x1b" "m";
+
+enum Menus { FileMenu = 0, ActionsMenu, HelpMenu };
 
 // Linhas fixas da tela: título, separadores, cabeçalho, abas, status e teclas.
 constexpr int kFixedLines = 9;
+// Itens de uma lista mostrados no diálogo da transação; a lista completa vai à Saída.
+constexpr size_t kDialogItems = 10;
+
+std::string defaultElevator()
+{
+    return ::geteuid() == 0 ? std::string() : std::string("doas");
+}
+
+// Remove o último caractere UTF-8 (Backspace no campo de texto).
+void popUtf8(std::string &s)
+{
+    while (!s.empty()) {
+        const unsigned char c = static_cast<unsigned char>(s.back());
+        s.pop_back();
+        if ((c & 0xC0) != 0x80)
+            break;
+    }
+}
+
+std::string join(const std::vector<std::string> &v, const std::string &sep)
+{
+    std::string out;
+    for (size_t i = 0; i < v.size(); ++i)
+        out += (i ? sep : std::string()) + v[i];
+    return out;
+}
+
+// Até kDialogItems itens, um por linha, e "… e mais N".
+std::string bulletList(const std::vector<std::string> &items)
+{
+    std::string out;
+    for (size_t i = 0; i < items.size() && i < kDialogItems; ++i)
+        out += "  • " + items[i] + "\n";
+    if (items.size() > kDialogItems)
+        out += "  " + i18n::trf("… and %1 more (see the Output tab)", {std::to_string(items.size() - kDialogItems)})
+               + "\n";
+    return out;
+}
 
 } // namespace
 
 App::App(const Options &options)
     : m_settings(options.settingsPath)
-    , m_mgr(options.pkgPath)
+    , m_mgr(options.pkgPath,
+            options.elevator == "-" ? m_settings.value("elevator", defaultElevator()) : options.elevator,
+            options.bectlPath)
     , m_iconMode(iconModeFromString(options.iconMode.empty() ? m_settings.value("icons", "nerd")
                                                              : options.iconMode))
     , m_remoteView(options.remote)
@@ -75,9 +127,7 @@ void App::refresh()
     m_error = false;
     const bool withRemote = m_remoteView;
     m_status = withRemote ? i18n::tr("Listing repository packages…") : i18n::tr("Listing installed packages…");
-    if (m_worker.joinable())
-        m_worker.join();
-    m_worker = std::thread([this, withRemote] {
+    const auto list = [this, withRemote] {
         Listing l;
         try {
             l.installed = m_mgr.listInstalled();
@@ -89,12 +139,18 @@ void App::refresh()
         } catch (const std::exception &e) {
             l.error = e.what();
         }
-        if (m_screen) {
-            m_screen->Post([this, l] { applyListing(l); });
-            m_screen->PostEvent(Event::Custom);
-        } else {
-            applyListing(l);
-        }
+        return l;
+    };
+    if (!m_screen) {   // testes
+        applyListing(list());
+        return;
+    }
+    if (m_worker.joinable())
+        m_worker.join();
+    m_worker = std::thread([this, list] {
+        const Listing l = list();
+        m_screen->Post([this, l] { applyListing(l); });
+        m_screen->PostEvent(Event::Custom);
     });
 }
 
@@ -123,9 +179,13 @@ void App::applyListing(const Listing &l)
     }
     rebuild();
 
-    if (l.error.empty()) {
+    if (l.error.empty() && m_operationError.empty()) {
         m_status = i18n::tr("Ready.");
         m_error = false;
+    } else if (l.error.empty()) {
+        // A listagem depois de uma operação que falhou não esconde o erro.
+        m_status = i18n::trf("ERROR: %1", {m_operationError});
+        m_error = true;
     }
     log(i18n::trf("%1 package(s) installed.", {std::to_string(m_installed.size())}));
     if (l.hasRemote)
@@ -276,6 +336,9 @@ ViewState App::viewState()
     s.iconMode = m_iconMode;
     s.sortChooserOpen = m_sortChooser;
     s.sortChooserIndex = m_sortChooserIndex;
+    s.toInstall = m_toInstall;
+    s.toRemove = m_toRemove;
+    s.dialog = m_dialog;
     return s;
 }
 
@@ -317,12 +380,650 @@ void App::setTab(int tab)
 
 void App::quit()
 {
-    if (m_busy) {
+    // Uma listagem ou prévia pode ser abandonada (a saída espera o pkg
+    // terminar); uma transação, não.
+    if (m_inOperation) {
         m_status = i18n::tr("Wait for the current operation to finish.");
         return;
     }
     if (m_screen)
         m_screen->Exit();
+}
+
+// ---------------------------------------------------------------------------
+// Marcas e transações (aba Ações do OctoPkg)
+// ---------------------------------------------------------------------------
+
+const octo::Package *App::current()
+{
+    const auto &r = rows();
+    const int sel = model::rowToSelect(m_all, r, m_selectedName);
+    return sel < 0 ? nullptr : &m_all[static_cast<size_t>(r[static_cast<size_t>(sel)])];
+}
+
+void App::markInstall()
+{
+    const octo::Package *p = current();
+    if (!p)
+        return;
+    if (p->locked) {
+        m_status = i18n::trf("%1 is locked.", {p->name});
+        return;
+    }
+    // Como no OctoPkg, + de novo desmarca; instalar e remover se excluem.
+    if (!m_toInstall.erase(p->name)) {
+        m_toInstall.insert(p->name);
+        m_toRemove.erase(p->name);
+    }
+}
+
+void App::markRemove()
+{
+    const octo::Package *p = current();
+    if (!p)
+        return;
+    if (!p->installed) {
+        m_status = i18n::tr("Only installed packages can be removed.");
+        return;
+    }
+    if (octo::isForbidden(p->name)) {
+        m_status = i18n::trf("%1 cannot be removed.", {p->name});
+        return;
+    }
+    if (p->locked) {
+        m_status = i18n::trf("%1 is locked.", {p->name});
+        return;
+    }
+    if (!m_toRemove.erase(p->name)) {
+        m_toRemove.insert(p->name);
+        m_toInstall.erase(p->name);
+    }
+}
+
+void App::clearMarks()
+{
+    m_toInstall.clear();
+    m_toRemove.clear();
+}
+
+bool App::bootEnvironments()
+{
+    if (m_beAvailable < 0)
+        m_beAvailable = m_mgr.bootEnvironmentsAvailable() ? 1 : 0;
+    return m_beAvailable == 1;
+}
+
+void App::actApply()
+{
+    if (refuseWhileBusy())
+        return;
+    if (m_toInstall.empty() && m_toRemove.empty()) {
+        showMessage(i18n::tr("Actions"), i18n::tr("No packages marked. Use + to install and - to remove."));
+        return;
+    }
+    const std::vector<std::string> rem(m_toRemove.begin(), m_toRemove.end());
+    const std::vector<std::string> ins(m_toInstall.begin(), m_toInstall.end());
+    // A prévia (dry-run) como usuário, como o OctoPkg faz antes do diálogo.
+    runTask(i18n::tr("Collecting transaction data…"), [this, rem, ins]() -> Op {
+        octo::TransactionPreview removal, install;
+        if (!rem.empty())
+            removal = m_mgr.previewRemove(rem);
+        if (!ins.empty())
+            install = m_mgr.previewInstall(ins);
+        return [this, removal, install, rem, ins] { confirmTransaction(removal, install, rem, ins); };
+    });
+}
+
+void App::confirmTransaction(const octo::TransactionPreview &removal, const octo::TransactionPreview &install,
+                             const std::vector<std::string> &rem, const std::vector<std::string> &ins)
+{
+    // Removidos: os pedidos, os que dependem deles (-R) e os conflitos da instalação.
+    std::vector<std::string> removed = removal.removed();
+    for (const auto &i : install.removed())
+        removed.push_back(i);
+    const std::vector<std::string> retrieved = install.items("");
+
+    std::string message;
+    if (!retrieved.empty()) {
+        message += retrieved.size() == 1 ? i18n::tr("The following package needs to be retrieved")
+                                         : i18n::trf("The following %1 packages need to be retrieved",
+                                                     {std::to_string(retrieved.size())});
+        message += "\n" + bulletList(retrieved);
+        if (!install.downloadSize.empty())
+            message += i18n::trf("Total download size: %1", {install.downloadSize}) + "\n";
+        message += "\n";
+    }
+    if (!removed.empty()) {
+        message += removed.size() == 1 ? i18n::tr("The following package will be removed")
+                                       : i18n::trf("The following %1 packages will be removed",
+                                                   {std::to_string(removed.size())});
+        message += "\n" + bulletList(removed) + "\n";
+    }
+    if (retrieved.empty() && removed.empty())
+        message += i18n::tr("Nothing to do: the marked packages are already in this state.") + "\n\n";
+    message += i18n::tr("Confirm?");
+
+    log(i18n::tr("Transaction:"));
+    for (const auto &i : retrieved)
+        log("  + " + i);
+    for (const auto &i : removed)
+        log("  - " + i);
+
+    // Como no OctoPkg: "Aviso" quando a remoção leva mais pacotes do que os marcados.
+    const bool danger = removed.size() > rem.size();
+    std::vector<DialogField> fields;
+    const std::string be = octo::bootEnvironmentName(std::time(nullptr));
+    if (bootEnvironments()) {
+        DialogField f;
+        f.kind = DialogField::Check;
+        f.label = i18n::tr("Create a boot environment before the transaction");
+        f.checked = !ins.empty();   // o OctoPkg desmarca na remoção
+        f.hint = i18n::trf("Name: %1", {be});
+        fields.push_back(f);
+    }
+    showForm(danger ? i18n::tr("Warning") : i18n::tr("Confirmation"), message, fields, danger,
+             [this, rem, ins, be](const std::vector<DialogField> &f) {
+                 const bool withBe = !f.empty() && f[0].checked;
+                 std::string command;
+                 if (withBe)
+                     command = m_mgr.commandLine({"create", be}, true) + "; ";
+                 if (!rem.empty())
+                     command += m_mgr.commandLine({"remove", "-R", "-y", join(rem, " ")})
+                                + (ins.empty() ? "" : "; ");
+                 if (!ins.empty())
+                     command += m_mgr.commandLine({"install", "-f", "-y", join(ins, " ")});
+                 runOperation(
+                     ins.empty() ? i18n::tr("Removing selected packages...")
+                                 : i18n::tr("Installing selected packages..."),
+                     command,
+                     [this, withBe, be, rem, ins](const octo::OutputFn &out) {
+                         // Sem shell: o pkg não roda se o Boot Environment falhar.
+                         if (withBe)
+                             m_mgr.createBootEnvironment(be, out);
+                         if (!rem.empty())
+                             m_mgr.remove(rem, out);
+                         if (!ins.empty())
+                             m_mgr.install(ins, out);
+                     },
+                     [this, rem, ins, withBe, be] {
+                         for (const auto &n : rem)
+                             m_toRemove.erase(n);
+                         for (const auto &n : ins)
+                             m_toInstall.erase(n);
+                         std::string summary;
+                         if (withBe)
+                             summary += i18n::trf("Boot environment: %1", {be}) + "\n";
+                         if (!ins.empty())
+                             summary += i18n::trf("Installed: %1", {join(ins, ", ")}) + "\n";
+                         if (!rem.empty())
+                             summary += i18n::trf("Removed: %1", {join(rem, ", ")}) + "\n";
+                         showMessage(i18n::tr("Command finished OK!"), summary + i18n::tr("Details in the Output tab."));
+                     });
+             });
+}
+
+void App::actUpgrade()
+{
+    if (refuseWhileBusy())
+        return;
+    runTask(i18n::tr("Collecting transaction data…"), [this]() -> Op {
+        const octo::TransactionPreview p = m_mgr.previewUpgrade();
+        return [this, p] {
+            if (p.count() == 0) {
+                showMessage(i18n::tr("System upgrade"), i18n::tr("There are no new updates available!"));
+                return;
+            }
+            const std::vector<std::string> items = p.items("");
+            std::string message = items.size() == 1 ? i18n::tr("The following package needs to be retrieved")
+                                                    : i18n::trf("The following %1 packages need to be retrieved",
+                                                                {std::to_string(items.size())});
+            message += "\n" + bulletList(items);
+            if (!p.removed().empty())
+                message += i18n::trf("The following %1 packages will be removed", {std::to_string(p.removed().size())})
+                           + "\n" + bulletList(p.removed());
+            if (!p.downloadSize.empty())
+                message += i18n::trf("Total download size: %1", {p.downloadSize}) + "\n";
+            message += "\n" + i18n::tr("Confirm?");
+            log(i18n::tr("Transaction:"));
+            for (const auto &i : items)
+                log("  + " + i);
+            std::vector<DialogField> fields;
+            const std::string be = octo::bootEnvironmentName(std::time(nullptr));
+            if (bootEnvironments()) {
+                DialogField f;
+                f.kind = DialogField::Check;
+                f.label = i18n::tr("Create a boot environment before the transaction");
+                f.checked = true;
+                f.hint = i18n::trf("Name: %1", {be});
+                fields.push_back(f);
+            }
+            showForm(i18n::tr("System upgrade"), message, fields, false,
+                     [this, be](const std::vector<DialogField> &f) {
+                         const bool withBe = !f.empty() && f[0].checked;
+                         runOperation(i18n::tr("Installing updates..."),
+                                      (withBe ? m_mgr.commandLine({"create", be}, true) + "; " : std::string())
+                                          + m_mgr.commandLine({"upgrade", "-y"}),
+                                      [this, withBe, be](const octo::OutputFn &out) {
+                                          if (withBe)
+                                              m_mgr.createBootEnvironment(be, out);
+                                          m_mgr.upgrade(out);
+                                      },
+                                      [this, withBe, be] {
+                                          showMessage(i18n::tr("Command finished OK!"),
+                                                      (withBe ? i18n::trf("Boot environment: %1", {be}) + "\n"
+                                                              : std::string())
+                                                          + i18n::tr("Details in the Output tab."));
+                                      });
+                     });
+        };
+    });
+}
+
+void App::actUpdate()
+{
+    runOperation(i18n::tr("Synchronizing the package database…"), m_mgr.commandLine({"update", "-f"}),
+                 [this](const octo::OutputFn &out) { m_mgr.update(out); }, nullptr);
+}
+
+void App::actClean()
+{
+    if (refuseWhileBusy())
+        return;
+    showConfirm(i18n::tr("Clean the local cache"), i18n::tr("Do you really want to clean the local package cache?"),
+                false, [this] {
+                    runOperation(i18n::tr("Cleaning the local cache..."), m_mgr.commandLine({"clean", "-a", "-y"}),
+                                 [this](const octo::OutputFn &out) { m_mgr.clean(out); }, nullptr);
+                });
+}
+
+void App::actLock(bool lock)
+{
+    const octo::Package *p = current();
+    if (!p || !p->installed) {
+        m_status = i18n::tr("Select an installed package.");
+        return;
+    }
+    const std::string name = p->name;
+    runOperation(lock ? i18n::tr("Locking…") : i18n::tr("Unlocking…"),
+                 m_mgr.commandLine({lock ? "lock" : "unlock", "-y", name}),
+                 [this, lock, name](const octo::OutputFn &out) {
+                     if (lock)
+                         m_mgr.lock(name, out);
+                     else
+                         m_mgr.unlock(name, out);
+                 },
+                 nullptr);
+}
+
+void App::actAbout()
+{
+    std::string pkgVersion;
+    try {
+        pkgVersion = m_mgr.version();
+    } catch (const std::exception &) {
+        pkgVersion = "?";
+    }
+    showMessage(i18n::tr("About"), std::string("octopkg-tui ") + OCTOPKG_TUI_VERSION
+                                        + "\npkg(8) " + pkgVersion + " · FTXUI"
+                                        + "\n" + i18n::tr("Based on OctoPkg, © Alexandre Albuquerque Arnt")
+                                        + "\nGPL-2.0-or-later"
+                                        + "\nhttps://github.com/cleberalves40/octopkg-tui");
+}
+
+// ---------------------------------------------------------------------------
+// Execução: prévias e operações elevadas
+// ---------------------------------------------------------------------------
+
+bool App::refuseWhileBusy()
+{
+    if (!m_busy)
+        return false;
+    m_status = i18n::tr("Wait for the current operation to finish.");
+    return true;
+}
+
+void App::runTask(const std::string &status, const Task &task)
+{
+    if (refuseWhileBusy())
+        return;
+    const auto attempt = [task](std::string *error) -> Op {
+        try {
+            return task();
+        } catch (const std::exception &e) {
+            *error = e.what();
+        }
+        return nullptr;
+    };
+    const auto apply = [this](const Op &then, const std::string &error) {
+        m_busy = false;
+        m_status = i18n::tr("Ready.");
+        if (!error.empty()) {
+            m_error = true;
+            m_status = i18n::trf("ERROR: %1", {error});
+            log(m_status);
+            showMessage(i18n::tr("Error"), error);
+            return;
+        }
+        m_error = false;
+        if (then)
+            then();
+    };
+    if (!m_screen) {   // testes
+        std::string error;
+        const Op then = attempt(&error);
+        apply(then, error);
+        return;
+    }
+    m_busy = true;
+    m_error = false;
+    m_status = status;
+    log(status);
+    if (m_worker.joinable())
+        m_worker.join();
+    m_worker = std::thread([this, attempt, apply] {
+        std::string error;
+        const Op then = attempt(&error);
+        m_screen->Post([apply, then, error] { apply(then, error); });
+        m_screen->PostEvent(Event::Custom);
+    });
+}
+
+// O doas/sudo pede senha? Testa com -n (não interativo) e uma chamada
+// inofensiva do próprio pkg, que é o que a regra do doas.conf costuma liberar.
+bool App::passwordNeeded()
+{
+    if (m_mgr.elevator().empty())
+        return false;
+    const std::string tool = octo::findExecutable(m_mgr.elevator());
+    if (tool.empty())
+        return false;   // a operação informa que o elevador não existe
+    const auto r = octo::runProcess({tool, "-n", m_mgr.pkgPath(), "-v"}, 10000);
+    return !r.started || r.status != 0;
+}
+
+void App::appendOutput(const std::string &chunk)
+{
+    // Linha a linha; "\r" (barras de progresso) recomeça a linha atual.
+    for (char c : chunk) {
+        if (c == '\n') {
+            m_log.push_back("  " + m_partial);
+            m_partial.clear();
+        } else if (c == '\r') {
+            m_partial.clear();
+        } else {
+            m_partial += c;
+        }
+    }
+    while (m_log.size() > 2000)
+        m_log.erase(m_log.begin());
+}
+
+void App::runOperation(const std::string &status, const std::string &command, const Work &work,
+                       const Op &onSuccess)
+{
+    if (refuseWhileBusy())
+        return;
+    m_operationError.clear();
+    log(command);
+    // Como no OctoPkg, a aba Saída acompanha a transação.
+    m_tab = OutputTab;
+    m_contentFocused = false;
+    m_partial.clear();
+    const auto attempt = [work](const octo::OutputFn &out) {
+        try {
+            work(out);
+        } catch (const std::exception &e) {
+            return std::string(e.what());
+        }
+        return std::string();
+    };
+
+    if (!m_screen) {   // testes
+        finishOperation(attempt([this](const std::string &c) { appendOutput(c); }), onSuccess);
+        return;
+    }
+
+    if (passwordNeeded()) {
+        // O doas/sudo pede a senha no terminal: a tela é suspensa enquanto
+        // isso, e a saída aparece no terminal e depois na aba Saída.
+        std::string error, captured;
+        m_screen->WithRestoredIO([&] {
+            std::printf("\noctopkg-tui — %s\n%s\n\n", i18n::trf("Running: %1", {command}).c_str(),
+                        i18n::trf("%1 may ask for your password.", {m_mgr.elevator()}).c_str());
+            std::fflush(stdout);
+            error = attempt([&captured](const std::string &c) {
+                std::fwrite(c.data(), 1, c.size(), stdout);
+                std::fflush(stdout);
+                captured += c;
+            });
+        })();
+        appendOutput(captured);
+        finishOperation(error, onSuccess);
+        return;
+    }
+
+    m_busy = true;
+    m_inOperation = true;
+    m_error = false;
+    m_status = status;
+    if (m_worker.joinable())
+        m_worker.join();
+    m_worker = std::thread([this, attempt, onSuccess] {
+        const std::string error = attempt([this](const std::string &c) {
+            m_screen->Post([this, c] { appendOutput(c); });
+            m_screen->PostEvent(Event::Custom);
+        });
+        m_screen->Post([this, error, onSuccess] { finishOperation(error, onSuccess); });
+        m_screen->PostEvent(Event::Custom);
+    });
+}
+
+void App::finishOperation(const std::string &error, const Op &onSuccess)
+{
+    m_busy = false;
+    m_inOperation = false;
+    if (!m_partial.empty())
+        appendOutput("\n");
+    if (!error.empty()) {
+        m_operationError = error;
+        m_error = true;
+        m_status = i18n::trf("ERROR: %1", {error});
+        log(m_status);
+        showMessage(i18n::tr("Error"), error);
+        refresh();   // a transação pode ter feito parte do trabalho
+        return;
+    }
+    m_error = false;
+    m_status = i18n::tr("Ready.");
+    log(i18n::tr("Command finished OK!"));
+    if (onSuccess)
+        onSuccess();
+    refresh();
+}
+
+// ---------------------------------------------------------------------------
+// Diálogos e menus
+// ---------------------------------------------------------------------------
+
+void App::showMessage(const std::string &title, const std::string &message)
+{
+    m_dialog = Dialog{};
+    m_dialog.kind = Dialog::Message;
+    m_dialog.title = title;
+    m_dialog.message = message;
+}
+
+void App::showConfirm(const std::string &title, const std::string &message, bool danger, const Op &onYes)
+{
+    m_dialog = Dialog{};
+    m_dialog.kind = Dialog::Confirm;
+    m_dialog.title = title;
+    m_dialog.message = message;
+    m_dialog.danger = danger;
+    m_dialog.focus = danger ? 1 : 0;   // destrutivo: "Não" por padrão
+    m_onAccept = onYes;
+}
+
+void App::showForm(const std::string &title, const std::string &message, std::vector<DialogField> fields,
+                   bool danger, FormOp onAccept)
+{
+    m_dialog = Dialog{};
+    m_dialog.kind = Dialog::Form;
+    m_dialog.title = title;
+    m_dialog.message = message;
+    m_dialog.fields = std::move(fields);
+    m_dialog.danger = danger;
+    // O foco começa no botão: OK, ou Cancelar se a transação remove a mais.
+    m_dialog.focus = static_cast<int>(m_dialog.fields.size()) + (danger ? 1 : 0);
+    m_onForm = std::move(onAccept);
+}
+
+void App::openMenu(int menu)
+{
+    m_dialog = Dialog{};
+    m_dialog.kind = Dialog::Menu;
+    m_dialog.menus = {i18n::tr("File"), i18n::tr("Actions"), i18n::tr("Help")};
+    const auto sep = std::make_pair(std::string(), std::string());
+    m_dialog.items = {
+        {{i18n::tr("Refresh the package list"), "F5"},
+         {i18n::tr("Switch between installed and repository packages"), "i"},
+         sep,
+         {i18n::tr("Check updates"), "Ctrl+K"},
+         {i18n::tr("Install updates"), "Ctrl+U"},
+         {i18n::tr("Clean the local cache"), ""},
+         sep,
+         {i18n::tr("Exit"), "Ctrl+Q"}},
+        {{i18n::tr("Mark for installation"), "+"},
+         {i18n::tr("Mark for removal"), "-"},
+         sep,
+         {i18n::tr("Apply"), "Alt+M"},
+         {i18n::tr("Cancel"), "Ctrl+E"},
+         sep,
+         {i18n::tr("Lock"), ""},
+         {i18n::tr("Unlock"), ""}},
+        {{i18n::tr("Keyboard shortcuts"), "F1"}, {i18n::tr("About"), ""}},
+    };
+    m_menuActions = {
+        {[this] { refresh(); }, [this] { toggleView(); }, nullptr, [this] { actUpdate(); },
+         [this] { actUpgrade(); }, [this] { actClean(); }, nullptr, [this] { quit(); }},
+        {[this] { markInstall(); }, [this] { markRemove(); }, nullptr, [this] { actApply(); },
+         [this] { clearMarks(); }, nullptr, [this] { actLock(true); }, [this] { actLock(false); }},
+        {[this] { setTab(HelpTab); }, [this] { actAbout(); }},
+    };
+    m_dialog.menu = std::max(0, std::min(menu, static_cast<int>(m_dialog.menus.size()) - 1));
+}
+
+bool App::handleDialogEvent(const Event &event)
+{
+    Dialog &d = m_dialog;
+    switch (d.kind) {
+    case Dialog::Message:
+        if (event == Event::Return || event == Event::Escape || event == Event::Character(' '))
+            d = Dialog{};
+        return true;
+
+    case Dialog::Confirm:
+        if (event == Event::ArrowLeft || event == Event::ArrowRight || event == Event::Tab
+            || event == Event::TabReverse)
+            d.focus = 1 - d.focus;
+        else if (event == Event::Escape || event == Event::Character('n') || event == Event::Character('N'))
+            d = Dialog{};
+        else if (event == Event::Return || event == Event::Character('y') || event == Event::Character('s')
+                 || event == Event::Character('Y') || event == Event::Character('S')) {
+            const bool yes = event != Event::Return || d.focus == 0;
+            const Op cb = m_onAccept;
+            d = Dialog{};
+            if (yes && cb)
+                cb();
+        }
+        return true;
+
+    case Dialog::Form: {
+        const int total = static_cast<int>(d.fields.size()) + 2;   // campos + OK + Cancelar
+        if (event == Event::Escape) {
+            d = Dialog{};
+            return true;
+        }
+        if (event == Event::Tab || event == Event::ArrowDown) {
+            d.focus = (d.focus + 1) % total;
+            return true;
+        }
+        if (event == Event::TabReverse || event == Event::ArrowUp) {
+            d.focus = (d.focus + total - 1) % total;
+            return true;
+        }
+        if (event == Event::Return) {
+            if (d.focus == total - 1) {   // Cancelar
+                d = Dialog{};
+                return true;
+            }
+            const std::vector<DialogField> fields = d.fields;
+            const FormOp cb = m_onForm;
+            d = Dialog{};
+            if (cb)
+                cb(fields);
+            return true;
+        }
+        if (d.focus >= static_cast<int>(d.fields.size()))
+            return true;
+        DialogField &f = d.fields[static_cast<size_t>(d.focus)];
+        switch (f.kind) {
+        case DialogField::Text:
+            if (event == Event::Backspace)
+                popUtf8(f.text);
+            else if (event.is_character())
+                f.text += event.character();
+            break;
+        case DialogField::Check:
+            if (event == Event::Character(' '))
+                f.checked = !f.checked;
+            break;
+        case DialogField::Choice:
+            if (!f.choices.empty() && (event == Event::ArrowRight || event == Event::Character(' ')))
+                f.choice = (f.choice + 1) % static_cast<int>(f.choices.size());
+            else if (!f.choices.empty() && event == Event::ArrowLeft)
+                f.choice = (f.choice + static_cast<int>(f.choices.size()) - 1) % static_cast<int>(f.choices.size());
+            break;
+        }
+        return true;
+    }
+
+    case Dialog::Menu: {
+        const int menus = static_cast<int>(d.menus.size());
+        const auto &items = d.items[static_cast<size_t>(d.menu)];
+        const auto step = [&](int delta) {
+            const int n = static_cast<int>(items.size());
+            for (int i = 0; i < n; ++i) {
+                d.item = (d.item + delta + n) % n;
+                if (!items[static_cast<size_t>(d.item)].first.empty())
+                    break;   // separadores não são selecionáveis
+            }
+        };
+        if (event == Event::Escape || event == Event::F9 || event == Event::F10)
+            d = Dialog{};
+        else if (event == Event::ArrowLeft) {
+            d.menu = (d.menu + menus - 1) % menus;
+            d.item = 0;
+        } else if (event == Event::ArrowRight) {
+            d.menu = (d.menu + 1) % menus;
+            d.item = 0;
+        } else if (event == Event::ArrowUp)
+            step(-1);
+        else if (event == Event::ArrowDown)
+            step(1);
+        else if (event == Event::Return) {
+            const Op action = m_menuActions[static_cast<size_t>(d.menu)][static_cast<size_t>(d.item)];
+            d = Dialog{};
+            if (action)
+                action();
+        }
+        return true;
+    }
+
+    case Dialog::None:
+        break;
+    }
+    return false;
 }
 
 bool App::handleMouse(const Event &event)
@@ -363,6 +1064,13 @@ bool App::handleMouse(const Event &event)
 
 bool App::handleEvent(const Event &event)
 {
+    // Diálogos e menus têm o teclado só para eles.
+    if (m_dialog.kind != Dialog::None) {
+        if (event.is_mouse())
+            return true;
+        return handleDialogEvent(event);
+    }
+
     // Escolha da coluna de ordenação (F6).
     if (m_sortChooser) {
         if (event == Event::ArrowUp || event == Event::Character('k'))
@@ -400,6 +1108,7 @@ bool App::handleEvent(const Event &event)
         return handleMouse(event);
 
     if (event == Event::F5 || raw == kCtrlR) {
+        m_operationError.clear();
         refresh();
         return true;
     }
@@ -421,6 +1130,44 @@ bool App::handleEvent(const Event &event)
         toggleView();
         return true;
     }
+    if (event == Event::F9 || raw == kAltA) {
+        openMenu(FileMenu);
+        return true;
+    }
+    if (raw == kAltC) {
+        openMenu(ActionsMenu);
+        return true;
+    }
+    if (raw == kAltJ) {
+        openMenu(HelpMenu);
+        return true;
+    }
+    // Marcas do OctoPkg: + instalar, - remover (e Insert/Delete).
+    if (event == Event::Character('+') || event == Event::Insert) {
+        markInstall();
+        return true;
+    }
+    if (event == Event::Character('-') || event == Event::Delete) {
+        markRemove();
+        return true;
+    }
+    if (raw == kCtrlE) {
+        clearMarks();
+        return true;
+    }
+    // Ctrl+M é Enter no terminal: aplicar fica em Alt+M.
+    if (raw == kAltM) {
+        actApply();
+        return true;
+    }
+    if (raw == kCtrlK) {
+        actUpdate();
+        return true;
+    }
+    if (raw == kCtrlU) {
+        actUpgrade();
+        return true;
+    }
     if (event == Event::F1) {
         setTab(HelpTab);
         return true;
@@ -437,7 +1184,7 @@ bool App::handleEvent(const Event &event)
         if (tab >= 0)
             setTab(tab);
         else
-            m_status = i18n::tr("This tab arrives in a later version.");
+            m_status = i18n::tr("This tab is not available yet.");
         return true;
     }
     if (event == Event::Tab || event == Event::TabReverse) {

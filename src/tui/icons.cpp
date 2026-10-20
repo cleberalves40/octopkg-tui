@@ -12,10 +12,13 @@ const IconSet kNerd = {
     "",   // arrow_circle_down
     "",   // lock
     "",   // circle_o
+    "",   // plus_circle
+    "",   // minus_circle
     "",   // archive
     "",   // cloud
     "",   // info_circle
     "",   // folder_open
+    "",   // tasks
     "",   // terminal
     "",   // question_circle
     "",   // filter
@@ -25,9 +28,9 @@ const IconSet kNerd = {
     "",   // exclamation_triangle
 };
 
-const IconSet kUnicode = {"●", "◉", "↑", "↓", "■", "○", "▣", "☁", "ℹ", "▤", "»", "?", "⌕", "▲", "▼", "…", "!"};
+const IconSet kUnicode = {"●", "◉", "↑", "↓", "■", "○", "⊕", "⊖", "▣", "☁", "ℹ", "▤", "☰", "»", "?", "⌕", "▲", "▼", "…", "!"};
 
-const IconSet kAscii = {"I", "d", "U", "N", "L", "-", "#", "@", "i", "f", ">", "?", "/", "^", "v", "*", "!"};
+const IconSet kAscii = {"I", "d", "U", "N", "L", "-", "+", "x", "#", "@", "i", "f", "a", ">", "?", "/", "^", "v", "*", "!"};
 
 } // namespace
 
