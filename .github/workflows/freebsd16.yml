@@ -6,11 +6,12 @@ name: FreeBSD 16-CURRENT
 # 15.1 (ci/freebsd-ci.sh, com tests/freebsd-e2e.sh, e ci/freebsd-port.sh).
 #
 # Em pull requests e na main, só o amd64 (com KVM, rápido); o aarch64, emulado,
-# leva horas e roda no disparo manual e toda segunda-feira, quando os
-# snapshots do CURRENT já mudaram.
+# leva horas e roda no disparo manual, toda segunda-feira (quando os snapshots
+# do CURRENT já mudaram) e num push no branch validate-freebsd16, como no
+# bectl-gui (o disparo manual só existe depois que o workflow chega à main).
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "validate-freebsd16" ]
   pull_request:
     branches: [ "main" ]
   schedule:
@@ -25,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: ${{ fromJSON((github.event_name == 'push' || github.event_name == 'pull_request') && '["amd64"]' || '["amd64", "aarch64"]') }}
+        arch: ${{ fromJSON((github.event_name == 'pull_request' || github.ref == 'refs/heads/main') && '["amd64"]' || '["amd64", "aarch64"]') }}
 
     steps:
     - uses: actions/checkout@v5
