@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <map>
 
 namespace model {
 
@@ -64,14 +65,32 @@ SortSpec nextOnHeaderClick(SortSpec current, int column)
     return {-1, true};
 }
 
+std::string category(const octo::Package &p)
+{
+    return p.origin.substr(0, p.origin.find('/'));
+}
+
+std::vector<std::pair<std::string, int>> categories(const std::vector<octo::Package> &all)
+{
+    std::map<std::string, int> count;
+    for (const auto &p : all) {
+        const std::string c = category(p);
+        if (!c.empty())
+            ++count[c];
+    }
+    return {count.begin(), count.end()};
+}
+
 std::vector<int> visibleRows(const std::vector<octo::Package> &all, const std::string &filter, SortSpec sort,
-                             SearchMode mode)
+                             SearchMode mode, const std::string &cat)
 {
     const std::string needle = lower(filter);
     std::vector<int> rows;
     std::vector<std::string> keys(all.size());   // nomes em minúsculas, calculados uma vez
     for (size_t i = 0; i < all.size(); ++i) {
         keys[i] = lower(all[i].name);
+        if (!cat.empty() && category(all[i]) != cat)
+            continue;
         bool match = needle.empty() || keys[i].find(needle) != std::string::npos;
         if (!match && mode == SearchMode::Description)
             match = lower(all[i].comment).find(needle) != std::string::npos;

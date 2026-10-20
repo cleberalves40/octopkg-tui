@@ -69,6 +69,10 @@ struct ViewState {
     std::string detailsError;
     model::SortSpec sort;
     model::SearchMode searchMode = model::SearchMode::Name;
+    std::string category;              // filtro por categoria; vazio: todas
+    bool categoryChooserOpen = false;  // F8
+    std::vector<std::pair<std::string, int>> categories;   // as da visão, com a contagem
+    int categoryIndex = 0;             // 0 = todas, 1… = categories
     bool remoteView = false;
     int tab = InfoTab;
     bool contentFocused = false;       // Tab: as setas rolam a aba

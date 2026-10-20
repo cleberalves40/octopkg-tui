@@ -38,8 +38,8 @@ instalar e **x** para remover.)
 
 ## Estado
 
-**v0.5.0.** Lista os pacotes instalados e os dos repositórios, com detalhes e
-arquivos, e busca por nome ou por descrição (**F7**); marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da
+**v0.6.0.** Lista os pacotes instalados e os dos repositórios, com detalhes e
+arquivos, busca por nome ou por descrição (**F7**) e filtra por categoria (**F8**); marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da
 transação e a executa (**Alt+M**), instala as atualizações (**Ctrl+U**), sincroniza o
 banco (**Ctrl+K**), limpa o cache e bloqueia ou desbloqueia pacotes, com os comandos
 do OctoPkg e, se o sistema usa Boot Environments, a opção de criar um antes. Tem os
@@ -129,6 +129,7 @@ cores de 24 bits; num terminal com menos, o FTXUI as aproxima.
 | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>PgUp</kbd> <kbd>PgDn</kbd> <kbd>Home</kbd> <kbd>End</kbd> (ou <kbd>j</kbd> <kbd>k</kbd>) | Mover a seleção |
 | <kbd>Ctrl+L</kbd> / <kbd>/</kbd> | Buscar pelo nome, ou pela descrição (<kbd>Esc</kbd>, <kbd>Enter</kbd> ou <kbd>Ctrl+P</kbd> volta à lista) |
 | <kbd>F7</kbd> | Buscar por nome ou por descrição (nome e comentário), como o menu Busca do OctoPkg |
+| <kbd>F8</kbd> | Filtrar por categoria do port (editors, www, devel…); uma letra salta na lista |
 | <kbd>i</kbd> / <kbd>Alt+I</kbd> | Alternar entre os pacotes instalados e os dos repositórios |
 | <kbd>+</kbd> / <kbd>Insert</kbd> | Marcar o pacote para instalar (de novo: desmarca) |
 | <kbd>-</kbd> / <kbd>Delete</kbd> | Marcar o pacote para remover |

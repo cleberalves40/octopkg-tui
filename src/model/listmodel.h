@@ -4,6 +4,7 @@
 #include "pkg.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 /**
@@ -38,7 +39,12 @@ SortSpec nextOnHeaderClick(SortSpec current, int column);
  * instalado, desatualizado, mais novo).
  */
 std::vector<int> visibleRows(const std::vector<octo::Package> &all, const std::string &filter, SortSpec sort,
-                             SearchMode mode = SearchMode::Name);
+                             SearchMode mode = SearchMode::Name, const std::string &category = std::string());
+
+/** A categoria do port: a parte da origem antes da barra ("editors/vim" → "editors"). */
+std::string category(const octo::Package &p);
+/** As categorias presentes em all, em ordem alfabética, com quantos pacotes cada uma tem. */
+std::vector<std::pair<std::string, int>> categories(const std::vector<octo::Package> &all);
 
 /**
  * Posição a selecionar após atualizar, filtrar ou ordenar: a do pacote que
