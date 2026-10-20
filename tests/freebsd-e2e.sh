@@ -1,9 +1,11 @@
 #!/bin/sh
 #
 # Testes no FreeBSD: os de núcleo, modelo e tela; o de integração contra o
-# pkg(8) real, só leitura; e a interface num pseudo-terminal, nas visões
-# Instalados e Repositório. Espera os pacotes de compilação instalados e o
-# catálogo do repositório atualizado (ci/freebsd-ci.sh cuida disso).
+# pkg(8) real (inclusive instalar e remover o figlet); e a interface num
+# pseudo-terminal, nas visões Instalados e Repositório, instalando e removendo
+# o figlet pela aba Ações. Precisa de root e espera os pacotes de compilação
+# instalados e o catálogo do repositório atualizado (ci/freebsd-ci.sh cuida
+# disso).
 #
 # uso: tests/freebsd-e2e.sh [diretório-de-build]
 
@@ -39,7 +41,7 @@ trap 'rm -rf "$work"' EXIT
 # intercala no texto.
 esc=$(printf '\033')
 plain() {
-	LC_ALL=C sed -e "s#${esc}\[[0-9;?]*[ -/]*[@-~]##g" -e "s#${esc}[()][0-9A-Za-z]##g" -e "s#${esc}[=>]##g" "$1"
+	LC_ALL=C sed -e "s#${esc}\[[0-9;?]*[ -/]*[@-~]##g" -e "s#${esc}[()][0-9A-Za-z]##g" -e "s#${esc}[=>]##g" "$@"
 }
 
 # ui <nome> <texto que indica a tela pronta> [opções...]
@@ -74,6 +76,60 @@ done
 step "interface: repositório (pseudo-terminal)"
 ui remote "@ Repository]" --remote
 grep -aq "@ Repository]" "$work/remote.txt" || uifail remote "a tela (repositório) não mostrou a visão Repositório"
+
+# Uma transação pela interface: na visão Repositório, busca o figlet, marca
+# com +, aplica (Alt+M) e confirma; depois o remove com -. Cada tecla só vai
+# quando a tela mostra o resultado da anterior. Como root, não há doas.
+step "interface: instalar e remover pela aba Ações (pseudo-terminal)"
+$pkgbin query %n figlet >/dev/null 2>&1 && fail "o figlet já estava instalado"
+# send manda a tecla e marca até onde a tela já foi gravada; wait_for só olha
+# o que foi desenhado depois disso, então um texto de antes (outro pacote
+# selecionado) não conta.
+from=1
+send() {
+	from=$(($(wc -c <"$work/tx.raw" 2>/dev/null || echo 0) + 1))
+	printf -- "$1"
+}
+wait_for() {
+	for i in $(seq 1 240); do
+		tail -c +"$from" "$work/tx.raw" 2>/dev/null | plain | grep -aq "$1" && return 0
+		sleep 1
+	done
+}
+set +e
+(
+	wait_for "@ Repository]"
+	send '/figlet\r'
+	sleep 2
+	send '+'
+	wait_for "3 a Actions (1)"
+	send '\033m'
+	wait_for "needs to be retrieved"
+	send '\r'
+	wait_for "Installed: figlet"
+	# A lista é refeita depois da transação; só então o figlet aparece
+	# instalado ("I", com --icons=ascii) e pode ser marcado para remover.
+	send '\r'
+	wait_for "I figlet"
+	send '-'
+	wait_for "x figlet"
+	send '\033m'
+	wait_for "will be removed"
+	send '\r'
+	wait_for "Removed: figlet"
+	send '\r'
+	wait_for "- figlet"
+	send q
+) | TERM=xterm-256color timeout 900 script -F -q "$work/tx.raw" \
+	"$build/octopkg-tui" --remote --icons=ascii --lang=en_US --config="$work/config" >/dev/null 2>&1
+rc=$?
+set -e
+plain "$work/tx.raw" >"$work/tx.txt"
+[ "$rc" -eq 0 ] || uifail tx "octopkg-tui (transação) terminou com status $rc"
+for text in "needs to be retrieved" "Installed: figlet" "will be removed" "Removed: figlet"; do
+	grep -aq "$text" "$work/tx.txt" || uifail tx "a tela (transação) não mostrou: $text"
+done
+$pkgbin query %n figlet >/dev/null 2>&1 && fail "o figlet não foi removido"
 
 "$build/octopkg-tui" --version
 

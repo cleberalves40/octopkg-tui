@@ -5,6 +5,52 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto usa [versionamento semântico](https://semver.org/lang/pt-BR/),
 com tags no formato `vX.Y.Z`.
 
+## [0.2.0] - 2026-10-20
+
+Transações: marcar, instalar, remover, atualizar e limpar, como no OctoPkg.
+
+### Adicionado
+- Marcas do OctoPkg: **+** (ou Insert) para instalar e **-** (ou Delete) para
+  remover o pacote selecionado; de novo, desmarca. O `pkg` e o `xorg` não podem ser
+  removidos, como no OctoPkg, e pacotes bloqueados não são marcados.
+- Aba **Ações** (3), com os pacotes a instalar e a remover; **Ctrl+E** desfaz as
+  marcas. A barra de status mostra quantos estão marcados.
+- **Alt+M** aplica (o Ctrl+M do OctoPkg chega como Enter). Antes, a prévia sem
+  privilégios (`pkg remove -n -R` e `pkg install -n -f`) vai a um diálogo com os
+  pacotes afetados e o tamanho do download; quando a remoção leva pacotes que
+  dependem dos marcados, o diálogo vira **Aviso**, em vermelho, com o foco em
+  Cancelar. Depois, `pkg remove -R -y` e `pkg install -f -y`, os comandos do
+  OctoPkg.
+- **Ctrl+U** instala as atualizações (`pkg upgrade -y`), com a mesma prévia;
+  **Ctrl+K** sincroniza o banco (`pkg update -f`); Arquivo → Limpar o cache local
+  (`pkg clean -a -y`), com confirmação; Ações → Bloquear e Desbloquear (`pkg lock`
+  e `pkg unlock`).
+- Boot Environment antes da transação, como no OctoPkg: com o sistema em Boot
+  Environments (`bectl check`), o diálogo oferece criar um (`bectl create
+  AAMMDD-hhmmss`), marcado ao instalar e atualizar e desmarcado ao remover. Sem
+  shell, ao contrário do OctoPkg: se o Boot Environment falhar, o `pkg` não roda.
+- doas/sudo, como no bectl-tui: sem senha a pedir, a operação roda em segundo
+  plano e a saída do `pkg` aparece ao vivo na aba Saída; se o doas/sudo pedir
+  senha, a tela é suspensa enquanto ele usa o terminal. Preferência `elevator` e
+  opção `--elevator=doas|sudo|none`; `--bectl` para o caminho do bectl.
+- Menus Arquivo, Ações e Ajuda (**F9**, **Alt+A**, **Alt+C**, **Alt+J**), com os
+  atalhos de cada item; Ajuda → Sobre mostra as versões do octopkg-tui e do pkg.
+- Diálogos de formulário, confirmação e mensagem, portados do bectl-tui; erros do
+  `pkg` aparecem num diálogo, no status e na aba Saída.
+- Barra de teclas no estilo do mc (F1, F5, F6, F9, F10, +/-, Alt+M) e a aba Ajuda
+  com todos os atalhos.
+- Testes: as prévias e as operações contra um pkg, um doas e um bectl falsos; cada
+  marca, diálogo, menu e operação dirigidos por teclas; no FreeBSD, a integração
+  instala, bloqueia, desbloqueia e remove o `figlet` de verdade, e a interface faz o
+  mesmo num pseudo-terminal, pela aba Ações; o teste de fumaça abre o menu e marca
+  um pacote.
+
+### Alterado
+- Sair (q, F10, Ctrl+Q) é recusado só durante uma operação; uma listagem em
+  andamento não impede mais a saída.
+- Depois de uma operação que falhou, o erro continua na barra de status até a
+  próxima ação, em vez de ser trocado por "Pronto." pela nova listagem.
+
 ## [0.1.0] - 2026-10-19
 
 Primeira versão: somente leitura.
@@ -45,4 +91,5 @@ Primeira versão: somente leitura.
 - Compatível com o FTXUI 6.1.9 e 7.x: a primeira listagem parte de dentro do
   laço de eventos, porque o FTXUI 6 descarta tarefas enviadas antes dele.
 
+[0.2.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cleberalves40/octopkg-tui/releases/tag/v0.1.0

@@ -74,9 +74,17 @@ Element header(const ViewState &s, HitBoxes *boxes)
 Element row(const ViewState &s, size_t i, HitBoxes *boxes)
 {
     const octo::Package &p = s.rows[i];
-    Element icon = text(std::string(" ") + stateIcon(s.iconMode, p));
-    if (p.installed)
-        icon = icon | color(stateColor(p));
+    const IconSet &ic = icons(s.iconMode);
+    Element icon;
+    if (s.toInstall.count(p.name))
+        icon = text(std::string(" ") + ic.toInstall) | color(Color::Green) | bold;
+    else if (s.toRemove.count(p.name))
+        icon = text(std::string(" ") + ic.toRemove) | color(Color::Red) | bold;
+    else {
+        icon = text(std::string(" ") + stateIcon(s.iconMode, p));
+        if (p.installed)
+            icon = icon | color(stateColor(p));
+    }
     // Na visão Repositório, como no OctoPkg, a versão é a do repositório.
     Element line = hbox({
         cell(icon, kIconWidth),
@@ -86,7 +94,7 @@ Element row(const ViewState &s, size_t i, HitBoxes *boxes)
         text("  "),
         cell(text(octo::formatTime(p.installedOn)), kDateWidth),
     });
-    if (!p.installed)
+    if (!p.installed && !s.toInstall.count(p.name))
         line = line | dim;
     if (static_cast<int>(i) == s.selected)
         line = line | (s.contentFocused ? underlined : inverted);
@@ -113,9 +121,14 @@ Element tabs(const ViewState &s, HitBoxes *boxes)
     std::string files = std::string(ic.files) + " " + i18n::tr("Files");
     if (s.detailsReady && s.details.installed)
         files += " (" + std::to_string(s.details.files.size()) + ")";
+    std::string actions = std::string(ic.actions) + " " + i18n::tr("Actions");
+    const size_t marked = s.toInstall.size() + s.toRemove.size();
+    if (marked)
+        actions += " (" + std::to_string(marked) + ")";
     const std::string labels[TabCount] = {
         std::string(ic.info) + " " + i18n::tr("Info"),
         files,
+        actions,
         std::string(ic.output) + " " + i18n::tr("Output"),
         std::string(ic.help) + " " + i18n::tr("Help"),
     };
@@ -229,15 +242,43 @@ Elements helpLines()
         key("Ctrl+L  /", i18n::tr("Find a package in the package list")),
         key("Esc  Enter  Ctrl+P", i18n::tr("Go back to the package list")),
         key("i  Alt+I", i18n::tr("Switch between installed and repository packages")),
+        key("+  Insert", i18n::tr("Mark the selected package for installation")),
+        key("-  Delete", i18n::tr("Mark the selected package for removal")),
+        key("Alt+M", i18n::tr("Apply: install and remove the marked packages")),
+        key("Ctrl+E", i18n::tr("Cancel: clear the marks")),
+        key("Ctrl+K", i18n::tr("Check updates (pkg update)")),
+        key("Ctrl+U", i18n::tr("Install updates (pkg upgrade)")),
+        key("F9  Alt+A Alt+C Alt+J", i18n::tr("Menus File, Actions and Help")),
         key("F6", i18n::tr("Choose the sort column (again: reverse; (pkg order): original order)")),
-        key("1 2 4 6  Alt+1…Alt+6", i18n::tr("Tabs Info, Files, Output and Help")),
+        key("1 2 3 4 6  Alt+1…Alt+6", i18n::tr("Tabs Info, Files, Actions, Output and Help")),
         key("F1", i18n::tr("Show this help page")),
         key("Enter", i18n::tr("Show the Info tab of the selected package")),
         key("Tab", i18n::tr("Scroll the tab with the arrow keys")),
         key("Ctrl+Q  F10  q", i18n::tr("Exit")),
         text(i18n::tr("Click a column header to sort")) | dim,
-        text(i18n::tr("This version is read-only: installing and removing packages arrive in v0.2.0.")) | dim,
     };
+}
+
+Elements actionsLines(const ViewState &s)
+{
+    Elements out;
+    if (s.toInstall.empty() && s.toRemove.empty()) {
+        out.push_back(text(i18n::tr("No packages marked. Use + to install and - to remove.")) | dim);
+        return out;
+    }
+    const IconSet &ic = icons(s.iconMode);
+    const auto section = [&](const std::string &title, const std::set<std::string> &names, const char *icon,
+                             Color c) {
+        if (names.empty())
+            return;
+        out.push_back(text(title + " (" + std::to_string(names.size()) + ")") | bold);
+        for (const auto &n : names)
+            out.push_back(hbox({text(std::string("  ") + icon + " ") | color(c), text(n)}));
+    };
+    section(i18n::tr("To be installed"), s.toInstall, ic.toInstall, Color::Green);
+    section(i18n::tr("To be removed"), s.toRemove, ic.toRemove, Color::Red);
+    out.push_back(text(i18n::tr("Alt+M: apply   Ctrl+E: cancel")) | dim);
+    return out;
 }
 
 Elements outputLines(const ViewState &s)
@@ -253,6 +294,7 @@ Element tabContent(const ViewState &s, HitBoxes *boxes)
     Elements lines;
     switch (s.tab) {
     case FilesTab:  lines = filesLines(s); break;
+    case ActionsTab: lines = actionsLines(s); break;
     case OutputTab: lines = outputLines(s); break;
     case HelpTab:   lines = helpLines(); break;
     default:        lines = infoLines(s); break;
@@ -284,7 +326,12 @@ Element statusBar(const ViewState &s)
     Element l = text(left);
     if (s.error)
         l = l | color(Color::Red);
-    Elements right{text(i18n::trf("%1 package(s)", {std::to_string(s.totalPackages)}))};
+    Elements right;
+    if (!s.toInstall.empty())
+        right.push_back(text("+" + std::to_string(s.toInstall.size()) + "  ") | color(Color::Green));
+    if (!s.toRemove.empty())
+        right.push_back(text("-" + std::to_string(s.toRemove.size()) + "  ") | color(Color::Red));
+    right.push_back(text(i18n::trf("%1 package(s)", {std::to_string(s.totalPackages)})));
     if (s.outdatedCount > 0)
         right.push_back(text("  " + i18n::trf("%1 outdated", {std::to_string(s.outdatedCount)}))
                         | color(Color::Yellow));
@@ -294,15 +341,122 @@ Element statusBar(const ViewState &s)
     return hbox(std::move(all));
 }
 
-Element keyBar(const ViewState &s)
+Element keyBar()
 {
     const auto key = [](const char *k, const std::string &label) {
-        return hbox({text(k) | bold, text(label + "  ") | dim});
+        return hbox({text(k) | bold, text(label + " ") | inverted});
     };
-    return hbox({key("F5 ", i18n::tr("Refresh")), key("F6 ", i18n::tr("Sort")),
-                 key("^L ", i18n::tr("Find")),
-                 key("i ", s.remoteView ? i18n::tr("Installed packages") : i18n::tr("Repository")),
-                 key("1-6 ", i18n::tr("Tabs")), key("F10 ", i18n::tr("Exit"))});
+    // Como no Midnight Commander (e no bectl-tui): teclas de função numeradas.
+    return hbox({key("F1", i18n::tr("Help")), text(" "), key("F5", i18n::tr("Refresh")), text(" "),
+                 key("F6", i18n::tr("Sort")), text(" "), key("F9", i18n::tr("Menu")), text(" "),
+                 key("F10", i18n::tr("Exit")), text(" "), key("+/-", i18n::tr("Mark")), text(" "),
+                 key("M-m", i18n::tr("Apply")), filler()});
+}
+
+Element button(const std::string &label, bool focused, bool danger)
+{
+    Element b = text("[ " + label + " ]");
+    if (focused)
+        b = b | inverted | bold;
+    if (danger && focused)
+        b = b | color(Color::Red);
+    return b;
+}
+
+Elements paragraph(const std::string &message)
+{
+    Elements lines;
+    size_t start = 0;
+    for (;;) {
+        const size_t nl = message.find('\n', start);
+        lines.push_back(text(message.substr(start, nl == std::string::npos ? std::string::npos : nl - start)));
+        if (nl == std::string::npos)
+            break;
+        start = nl + 1;
+    }
+    return lines;
+}
+
+Element formDialog(const Dialog &d)
+{
+    Elements rows;
+    if (!d.message.empty()) {
+        rows = paragraph(d.message);
+        rows.push_back(text(""));
+    }
+    for (size_t i = 0; i < d.fields.size(); ++i) {
+        const DialogField &f = d.fields[i];
+        const bool focused = static_cast<int>(i) == d.focus;
+        Element value;
+        switch (f.kind) {
+        case DialogField::Text:
+            value = hbox({text(f.text), focused ? text("█") | blink : text("")}) | size(WIDTH, GREATER_THAN, 30)
+                    | borderLight;
+            break;
+        case DialogField::Check:
+            value = text(std::string(f.checked ? "[x] " : "[ ] ") + f.label);
+            break;
+        case DialogField::Choice:
+            value = text("< " + (f.choices.empty() ? std::string() : f.choices[f.choice]) + " >")
+                    | size(WIDTH, GREATER_THAN, 30);
+            break;
+        }
+        if (focused && f.kind != DialogField::Text)
+            value = value | inverted;
+        if (f.kind == DialogField::Check)
+            rows.push_back(value);
+        else
+            rows.push_back(hbox({text(f.label) | size(WIDTH, EQUAL, 28), value}));
+        if (!f.hint.empty())
+            rows.push_back(text("    " + f.hint) | dim);
+    }
+    const int ok = static_cast<int>(d.fields.size());
+    rows.push_back(text(""));
+    rows.push_back(hbox({filler(), button(i18n::tr("OK"), d.focus == ok, d.danger), text("  "),
+                         button(i18n::tr("Cancel"), d.focus == ok + 1, false)}));
+    rows.push_back(text(i18n::tr("Tab / ↑ ↓: field   Space: check   Enter: confirm   Esc: cancel")) | dim);
+    Element w = window(text(" " + d.title + " ") | bold, vbox(std::move(rows)));
+    return d.danger ? w | color(Color::Red) : w;
+}
+
+Element confirmDialog(const Dialog &d)
+{
+    Elements rows = paragraph(d.message);
+    rows.push_back(text(""));
+    rows.push_back(hbox({filler(), button(i18n::tr("Yes"), d.focus == 0, d.danger), text("  "),
+                         button(i18n::tr("No"), d.focus == 1, false)}));
+    Element w = window(text(" " + d.title + " ") | bold, vbox(std::move(rows)));
+    return d.danger ? w | color(Color::Red) : w;
+}
+
+Element messageDialog(const Dialog &d)
+{
+    Elements rows = paragraph(d.message);
+    rows.push_back(text(""));
+    rows.push_back(hbox({filler(), button(i18n::tr("OK"), true, false)}));
+    return window(text(" " + d.title + " ") | bold, vbox(std::move(rows)));
+}
+
+Element menuDialog(const Dialog &d)
+{
+    Elements titles;
+    for (size_t m = 0; m < d.menus.size(); ++m) {
+        Element t = text(" " + d.menus[m] + " ");
+        titles.push_back(static_cast<int>(m) == d.menu ? t | inverted | bold : t);
+    }
+    Elements items;
+    if (d.menu >= 0 && d.menu < static_cast<int>(d.items.size())) {
+        const auto &list = d.items[d.menu];
+        for (size_t i = 0; i < list.size(); ++i) {
+            if (list[i].first.empty()) {
+                items.push_back(separatorLight());
+                continue;
+            }
+            Element e = hbox({text(" " + list[i].first) | flex, text("  " + list[i].second + " ") | dim});
+            items.push_back(static_cast<int>(i) == d.item ? e | inverted : e);
+        }
+    }
+    return vbox({hbox(std::move(titles)), window(text(""), vbox(std::move(items)) | size(WIDTH, GREATER_THAN, 40))});
 }
 
 Element sortChooser(const ViewState &s)
@@ -322,7 +476,7 @@ Element sortChooser(const ViewState &s)
 
 char tabKey(int tab)
 {
-    static const char keys[TabCount] = {'1', '2', '4', '6'};
+    static const char keys[TabCount] = {'1', '2', '3', '4', '6'};
     return tab >= 0 && tab < TabCount ? keys[tab] : '?';
 }
 
@@ -370,10 +524,17 @@ Element render(const ViewState &s, Element filter, HitBoxes *boxes)
         tabContent(s, boxes),
         separator(),
         statusBar(s),
-        keyBar(s),
+        keyBar(),
     });
     if (s.sortChooserOpen)
         return dbox({main, sortChooser(s)});
+    switch (s.dialog.kind) {
+    case Dialog::Form:    return dbox({main, formDialog(s.dialog) | clear_under | center});
+    case Dialog::Confirm: return dbox({main, confirmDialog(s.dialog) | clear_under | center});
+    case Dialog::Message: return dbox({main, messageDialog(s.dialog) | clear_under | center});
+    case Dialog::Menu:    return dbox({main, menuDialog(s.dialog) | clear_under});
+    case Dialog::None:    break;
+    }
     return main;
 }
 

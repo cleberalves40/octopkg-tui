@@ -16,11 +16,11 @@ atalhos sempre que o terminal permite, e ícones [Nerd Fonts](https://www.nerdfo
 ────────────────────────────────────────────────────────────────────────────────────
  d ca_root_nss                   3.104                   1.02 MiB  2026-10-01 10:00
  I cmake                         3.31.6                 45.10 MiB  2026-10-01 10:02
- U curl                          8.9.1                   4.36 MiB  2026-10-01 10:00
+ + curl                          8.9.1                   4.36 MiB  2026-10-01 10:00
  L pkg                           2.3.1                  24.80 MiB  2026-09-20 08:30
  I vim                           9.1.1000               38.90 MiB  2026-10-05 14:12
 ────────────────────────────────────────────────────────────────────────────────────
- 1 i Informação   2 f Arquivos (34)   4 > Saída   6 ? Ajuda
+ 1 i Informação   2 f Arquivos (34)   3 a Ações (1)   4 > Saída   6 ? Ajuda
 curl  Command line tool and library for transferring data with URLs
 Estado:           Desatualizado (a versão 8.10.0 está disponível)
 Versão:           8.9.1
@@ -28,19 +28,23 @@ Origem:           ftp/curl
 Repositório:      FreeBSD
 URL:              https://curl.se/
 ────────────────────────────────────────────────────────────────────────────────────
-Pronto.                                              5 pacote(s)  1 desatualizado(s)
-F5 Atualizar  F6 Ordenar  ^L Buscar  i Repositório  1-6 Abas  F10 Sair
+Pronto.                                          +1  5 pacote(s)  1 desatualizado(s)
+F1Ajuda  F5Atualizar  F6Ordenar  F9Menu  F10Sair  +/-Marcar  M-mAplicar
 ```
 
 (com `--icons=ascii`: **I** instalado, **d** dependência, **U** desatualizado, **N** mais
-novo que o repositório, **L** bloqueado, **-** não instalado.)
+novo que o repositório, **L** bloqueado, **-** não instalado; **+** marcado para
+instalar e **x** para remover.)
 
 ## Estado
 
-**v0.1.0: somente leitura.** Lista os pacotes instalados e os dos repositórios, com os
-estados do OctoPkg, busca, ordenação, detalhes, arquivos, saída e ajuda. Marcar,
-instalar, remover, atualizar e limpar o cache (as abas Ações e a transação do OctoPkg)
-chegam na v0.2.0. Veja o [CHANGELOG](CHANGELOG.md).
+**v0.2.0: transações.** Além da lista, da busca, dos detalhes e dos arquivos da v0.1.0,
+marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da transação
+e a executa (**Alt+M**), instala as atualizações (**Ctrl+U**), sincroniza o banco
+(**Ctrl+K**), limpa o cache e bloqueia ou desbloqueia pacotes, com os comandos do
+OctoPkg e, se o sistema usa Boot Environments, a opção de criar um antes. A busca
+dentro das abas, Preferências e temas chegam na v0.3.0. Veja o
+[CHANGELOG](CHANGELOG.md).
 
 ## Requisitos (FreeBSD)
 
@@ -56,8 +60,31 @@ Para os ícones, configure o terminal com a fonte **JetBrainsMono Nerd Font Mono
 uma fonte Nerd, use `--icons=unicode` ou `--icons=ascii`.
 
 Ao contrário do OctoPkg, o octopkg-tui não depende do Qt: o FTXUI é um único pacote,
-sem X11 nem Wayland. Ele serve, por exemplo, a um servidor acessado por SSH. Nesta
-versão, só leitura, ele roda como usuário comum: as consultas ao `pkg` não pedem root.
+sem X11 nem Wayland. Ele serve, por exemplo, a um servidor acessado por SSH.
+
+## Privilégios
+
+A interface roda como usuário comum: listar, ver detalhes e calcular a prévia de uma
+transação não pedem root. Só as operações (`pkg install`, `remove`, `upgrade`,
+`update`, `clean`, `lock`, `unlock` e o `bectl create` do Boot Environment) passam
+pelo **doas** (padrão) ou pelo **sudo**, sem shell. Se o doas/sudo não precisar de
+senha, a operação roda em segundo plano e a saída aparece ao vivo na aba Saída; se
+precisar, a tela é suspensa enquanto ele pede a senha no terminal. Como root, o `pkg`
+roda direto.
+
+Um `/usr/local/etc/doas.conf` para o grupo `wheel`, pedindo a senha uma vez a cada
+alguns minutos:
+
+```
+permit persist :wheel cmd /usr/local/sbin/pkg
+permit persist :wheel cmd /sbin/bectl
+```
+
+(O `bectl check`, que decide se a opção do Boot Environment aparece, roda como
+usuário.)
+
+Para usar o sudo: `--elevator=sudo`, ou `elevator=sudo` em
+`~/.config/octopkg-tui/config`.
 
 ## Compilação
 
@@ -68,10 +95,12 @@ cmake --build build
 ```
 
 Opções: `--remote` (começa na visão Repositório), `--icons=nerd|unicode|ascii`,
-`--lang=en_US|pt_BR|es_ES`, `--config=ARQUIVO`, `--pkg=EXECUTÁVEL`, `--version`. As
-preferências ficam em `~/.config/octopkg-tui/config`; hoje, a ordem da tabela.
+`--lang=en_US|pt_BR|es_ES`, `--elevator=doas|sudo|none`, `--config=ARQUIVO`,
+`--pkg=EXECUTÁVEL`, `--bectl=EXECUTÁVEL`, `--version`. As preferências ficam em
+`~/.config/octopkg-tui/config`: a ordem da tabela, e `elevator`, `icons` e
+`language`, se definidas à mão.
 
-## Teclado e mouse (v0.1.0)
+## Teclado e mouse
 
 | Tecla | Ação |
 |:---|:---|
@@ -79,12 +108,18 @@ preferências ficam em `~/.config/octopkg-tui/config`; hoje, a ordem da tabela.
 | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>PgUp</kbd> <kbd>PgDn</kbd> <kbd>Home</kbd> <kbd>End</kbd> (ou <kbd>j</kbd> <kbd>k</kbd>) | Mover a seleção |
 | <kbd>Ctrl+L</kbd> / <kbd>/</kbd> | Buscar pelo nome (<kbd>Esc</kbd>, <kbd>Enter</kbd> ou <kbd>Ctrl+P</kbd> volta à lista) |
 | <kbd>i</kbd> / <kbd>Alt+I</kbd> | Alternar entre os pacotes instalados e os dos repositórios |
+| <kbd>+</kbd> / <kbd>Insert</kbd> | Marcar o pacote para instalar (de novo: desmarca) |
+| <kbd>-</kbd> / <kbd>Delete</kbd> | Marcar o pacote para remover |
+| <kbd>Alt+M</kbd> | Aplicar: prévia, confirmação e a transação |
+| <kbd>Ctrl+E</kbd> | Desfazer as marcas |
+| <kbd>Ctrl+U</kbd> / <kbd>Ctrl+K</kbd> | Instalar as atualizações / sincronizar o banco |
+| <kbd>F9</kbd> / <kbd>Alt+A</kbd> <kbd>Alt+C</kbd> <kbd>Alt+J</kbd> | Menus Arquivo, Ações e Ajuda |
 | <kbd>F6</kbd> | Escolher a coluna de ordenação: de novo na mesma coluna inverte, e "(ordem do pkg)" volta à ordem original |
 | Clique no cabeçalho | Ordenar: crescente, decrescente, ordem do pkg |
-| <kbd>1</kbd> <kbd>2</kbd> <kbd>4</kbd> <kbd>6</kbd> / <kbd>Alt+1</kbd> <kbd>Alt+2</kbd> <kbd>Alt+4</kbd> <kbd>Alt+6</kbd> | Abas Informação, Arquivos, Saída, Ajuda, com os números do OctoPkg (<kbd>F1</kbd>: Ajuda) |
+| <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> <kbd>6</kbd> / <kbd>Alt+1</kbd>…<kbd>Alt+6</kbd> | Abas Informação, Arquivos, Ações, Saída, Ajuda, com os números do OctoPkg (<kbd>F1</kbd>: Ajuda) |
 | <kbd>Enter</kbd> | Aba Informação do pacote selecionado |
 | <kbd>Tab</kbd> | Rolar a aba com as setas (de novo, ou <kbd>Esc</kbd>, volta à lista) |
-| <kbd>Ctrl+Q</kbd> / <kbd>F10</kbd> / <kbd>q</kbd> | Sair |
+| <kbd>Ctrl+Q</kbd> / <kbd>F10</kbd> / <kbd>q</kbd> | Sair (não durante uma operação) |
 
 O mapa completo, com a correspondência para os atalhos do OctoPkg, está em
 [docs/KEYMAP.md](docs/KEYMAP.md).
@@ -93,9 +128,9 @@ O mapa completo, com a correspondência para os atalhos do OctoPkg, está em
 
 | Camada | Local | Responsabilidade |
 |:---|:---|:---|
-| Núcleo | `src/core/` | `pkg(8)` sem shell e em inglês (`LC_ALL=C`), leitura de `pkg query`, `pkg rquery` e `pkg upgrade -n`, estados dos pacotes, tamanhos, i18n e preferências. C++17 puro: um porte da leitura de pacotes do OctoPkg (`Package`, `UnixCommand`). |
+| Núcleo | `src/core/` | `pkg(8)` sem shell e em inglês (`LC_ALL=C`), leitura de `pkg query`, `pkg rquery` e das prévias (`-n`), estados dos pacotes, as operações com doas/sudo e a saída ao vivo, Boot Environments, tamanhos, i18n e preferências. C++17 puro: um porte de `Package`, `UnixCommand` e das transações do OctoPkg. |
 | Modelo | `src/model/` | Filtro, ordenação (versão, tamanho, data, estado), seleção que acompanha o pacote e a janela visível da tabela |
-| Interface | `src/tui/` | FTXUI: tela, teclado, mouse, listagem e detalhes em segundo plano |
+| Interface | `src/tui/` | FTXUI: tela, teclado, mouse, marcas, diálogos e menus; listagem, detalhes, prévias e operações em segundo plano |
 
 As consultas usam formatos próprios do `pkg query`/`pkg rquery` (campos separados por
 TAB), em vez de ler a saída para pessoas de `pkg info` e `pkg search` como o OctoPkg:
@@ -105,18 +140,22 @@ o resultado não depende do alinhamento das colunas nem da versão do pkg.
 
 ```sh
 cmake -B build -S . -DOCTOPKG_TUI_BUILD_TESTS=ON && cmake --build build && ctest --test-dir build
-sh tests/freebsd-e2e.sh build    # no FreeBSD: integração com o pkg real e a interface
+sh tests/freebsd-e2e.sh build    # no FreeBSD, como root: integração com o pkg real e a interface
 sh tests/tui-smoke.sh build      # a interface num pseudo-terminal, com um pkg falso
 ```
 
-- `test_core`: leitura da saída do pkg (incluindo a de `pkg upgrade -n`), os estados
-  da visão Repositório, um pkg falso que confere os argumentos, a execução de
-  processos e as preferências.
+- `test_core`: leitura da saída do pkg (incluindo as prévias de instalar, remover e
+  atualizar), os estados da visão Repositório, um pkg, um doas e um bectl falsos que
+  conferem os argumentos de cada operação, a execução de processos e as preferências.
 - `test_model`: filtro, ordenação, seleção e rolagem, com 40 mil pacotes.
-- `test_view`: desenha a tela em texto e dirige a interface com eventos de teclado.
-- `test_integration`: contra o `pkg(8)` real, só leitura.
+- `test_view`: desenha a tela em texto e dirige a interface com eventos de teclado:
+  marcas, prévias, diálogos, menus e operações.
+- `test_integration`: contra o `pkg(8)` real; instala, bloqueia, desbloqueia e remove
+  o `figlet`.
 - `tests/tui-smoke.sh`: a interface num pseudo-terminal com um pkg falso (lista,
-  detalhes e saída); roda também no Ubuntu, contra o FTXUI 6.1.9.
+  detalhes, menu, marca e saída); roda também no Ubuntu, contra o FTXUI 6.1.9.
+- `tests/freebsd-e2e.sh`: além dos testes acima, instala e remove o `figlet` pela
+  interface, num pseudo-terminal.
 
 O CI roda no Ubuntu (com ASan e UBSan) e no FreeBSD 14.5 e 15.1, em amd64 e aarch64,
 incluindo a interface num pseudo-terminal.
