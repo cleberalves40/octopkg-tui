@@ -36,7 +36,9 @@ git clone -q --depth 1 --filter=blob:none --sparse \
 	https://github.com/freebsd/freebsd-ports.git "$ports"
 git -C "$ports" sparse-checkout set Mk Templates Keywords
 mkdir -p "$port" "$distdir" "$packages"
-cp freebsd/Makefile freebsd/pkg-descr freebsd/pkg-message "$port/"
+mkdir -p "$port/files"
+cp freebsd/Makefile freebsd/pkg-descr "$port/"
+cp freebsd/pkg-message.in "$port/files/"
 # Cada dependência é "arquivo-ou-pacote:origem[@flavor][:target]".
 origins=$(mk -V FETCH_DEPENDS -V EXTRACT_DEPENDS -V BUILD_DEPENDS -V LIB_DEPENDS \
 	-V RUN_DEPENDS -V PKG_DEPENDS | tr ' ' '\n' | sed -n 's/^[^:]*:\([^:@]*\).*/\1/p' | sort -u)
@@ -69,6 +71,7 @@ mk package
 pkgfile=$(mk -V PKGFILE)
 ls -l "$pkgfile"
 pkg info -F "$pkgfile" | sed -n '1,/^Description/p'
+pkg info -D -F "$pkgfile"
 
 step "instalação do pacote"
 pkg add "$pkgfile"

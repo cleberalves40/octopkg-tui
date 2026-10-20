@@ -11,8 +11,8 @@ Empacotamento: o port FreeBSD.
 
 ### Adicionado
 - Port em `freebsd/`, para `ports-mgmt/octopkg-tui` (a categoria do OctoPkg): o
-  FTXUI como dependência de biblioteca, a licença GPLv2+ e um `pkg-message` com o
-  `doas.conf` de exemplo e a fonte Nerd para os ícones.
+  FTXUI como dependência de biblioteca, a licença GPLv2+ e um `pkg-message` (gerado
+  com `SUB_FILES`) com o `doas.conf` de exemplo e a fonte Nerd para os ícones.
 - `ci/freebsd-port.sh`: validação do port nos quatro jobs FreeBSD, como no bectl-gui
   (`portlint -A`, `stage-qa` e `check-plist` com `DEVELOPER=yes`, o pacote, a
   instalação, o `--version` e o binário instalado num pseudo-terminal).

@@ -16,6 +16,8 @@ USES=		cmake compiler:c++17-lang
 USE_GITHUB=	yes
 GH_ACCOUNT=	cleberalves40
 
+SUB_FILES=	pkg-message
+
 PLIST_FILES=	bin/octopkg-tui
 
 .include <bsd.port.mk>

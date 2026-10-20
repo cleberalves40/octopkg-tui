@@ -91,8 +91,9 @@ Para usar o sudo: `--elevator=sudo`, ou `elevator=sudo` em
 O port fica em `freebsd/` e é validado no CI; enquanto ele não está na árvore oficial:
 
 ```sh
-mkdir -p /usr/ports/ports-mgmt/octopkg-tui
-cp freebsd/* /usr/ports/ports-mgmt/octopkg-tui/
+mkdir -p /usr/ports/ports-mgmt/octopkg-tui/files
+cp freebsd/Makefile freebsd/pkg-descr /usr/ports/ports-mgmt/octopkg-tui/
+cp freebsd/pkg-message.in /usr/ports/ports-mgmt/octopkg-tui/files/
 cd /usr/ports/ports-mgmt/octopkg-tui && make makesum install clean
 ```
 

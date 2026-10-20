@@ -38,8 +38,8 @@ A versão fica em dois arquivos, e o CI reprova se eles divergirem ou se o
 
 ## O port
 
-O port fica em `freebsd/` (`Makefile`, `pkg-descr` e `pkg-message`, com o exemplo de
-`doas.conf`) e é validado a cada pull request por `ci/freebsd-port.sh`, nas quatro
+O port fica em `freebsd/` (`Makefile`, `pkg-descr` e `pkg-message.in`, com o exemplo de
+`doas.conf`, que vai para `files/` no port) e é validado a cada pull request por `ci/freebsd-port.sh`, nas quatro
 combinações de release e arquitetura:
 
 - `portlint -A`, com o port numa árvore de ports em git, como antes de um commit na
@@ -57,9 +57,10 @@ e o prefixo que o `USE_GITHUB` espera.
 Para propô-lo na árvore oficial, como `ports-mgmt/octopkg-tui` (a categoria do
 OctoPkg), depois de publicar a tag:
 
-1. Numa máquina FreeBSD com a árvore de ports atualizada, copie os arquivos de
-   `freebsd/` para `/usr/ports/ports-mgmt/octopkg-tui/` e gere o `distinfo` a partir
-   do tarball da tag publicada:
+1. Numa máquina FreeBSD com a árvore de ports atualizada, copie `Makefile` e
+   `pkg-descr` de `freebsd/` para `/usr/ports/ports-mgmt/octopkg-tui/` e
+   `pkg-message.in` para `files/`, e gere o `distinfo` a partir do tarball da tag
+   publicada:
 
    ```sh
    cd /usr/ports/ports-mgmt/octopkg-tui

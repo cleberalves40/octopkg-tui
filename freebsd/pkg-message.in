@@ -6,10 +6,10 @@ package operations, through doas(1) (the default) or sudo(8):
 
   pkg install doas
 
-and, in /usr/local/etc/doas.conf, for example:
+and, in %%LOCALBASE%%/etc/doas.conf, for example:
 
-  permit persist :wheel cmd /usr/local/sbin/pkg
-  permit persist :wheel cmd /sbin/bectl
+  permit persist :wheel cmd %%LOCALBASE%%/sbin/pkg
+  permit persist :wheel cmd bectl
 
 To use sudo instead, run octopkg-tui --elevator=sudo, or add
 "elevator=sudo" to ~/.config/octopkg-tui/config.
