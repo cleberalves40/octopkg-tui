@@ -7,6 +7,7 @@
 // elevador), os pacotes de compilação do projeto instalados (cmake, ninja,
 // catch2, ftxui), o catálogo do repositório atualizado e o figlet ausente.
 
+#include "news.h"
 #include "pkg.h"
 #include "support.h"
 
@@ -169,4 +170,25 @@ TEST_CASE("prévia da atualização, limpeza do cache e Boot Environments", "[in
     CHECK_NOTHROW(mgr().clean());
     // A VM de CI pode estar em UFS ou ZFS: só não pode falhar.
     CHECK_NOTHROW(mgr().bootEnvironmentsAvailable());
+}
+
+TEST_CASE("baixa as notícias da variante com o fetch(1)", "[integration][news]")
+{
+    REQUIRE_PKG();
+    TempDir dir;
+    const octo::Flavour flavour = octo::systemFlavour();
+    REQUIRE(flavour == octo::Flavour::FreeBSD);   // as VMs de CI são FreeBSD
+    octo::NewsFeed news(dir.file("news.xml"));
+    const octo::NewsResult r = news.refresh(flavour);
+    // A rede da VM pode falhar; isso não é um defeito do octopkg-tui.
+    if (!r.error.empty())
+        SKIP("sem acesso a " + octo::newsUrl(flavour) + ": " + r.error);
+    CHECK(r.updated);
+    REQUIRE_FALSE(r.items.empty());
+    CHECK(r.items.size() <= 10);
+    for (const auto &n : r.items) {
+        CHECK_FALSE((n.title.empty() && n.description.empty()));
+        CHECK(n.link.rfind("https://", 0) == 0);
+    }
+    CHECK(news.cached().items.size() == r.items.size());
 }

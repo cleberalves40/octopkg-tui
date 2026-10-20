@@ -9,8 +9,7 @@ programa. Alguns não chegam, ou chegam iguais a outra tecla, e ganham uma alter
 - <kbd>Alt+tecla</kbd> chega como <kbd>Esc</kbd> seguido da tecla; no Terminal do macOS,
   ative "Usar Option como Meta".
 
-As abas mantêm os números do OctoPkg. Notícias (5) ainda não existe: a tecla avisa
-na barra de status.
+As abas mantêm os números do OctoPkg, de 1 a 6.
 
 | Ação | OctoPkg | octopkg-tui | Disponível |
 |:---|:---|:---|:---|
@@ -33,10 +32,10 @@ na barra de status.
 | Limpar o cache (pkg clean) | Ctrl+Shift+C | menu Arquivo (Ctrl+Shift+C chega como Ctrl+C, que encerra o FTXUI) | v0.2.0 |
 | Bloquear / desbloquear | menu de contexto | menu Ações | v0.2.0 |
 | Menus | barra de menus | **F9** ou **Alt+A** (Arquivo), **Alt+C** (Ações), **Alt+J** (Ajuda), como no bectl-tui | v0.2.0 |
-| Buscar texto nas abas Arquivos, Saída e Ajuda | Ctrl+F (e F3 / Shift+F3 na barra de busca) | **Ctrl+F**; **Enter**/**F3** e **Shift+F3** (ou ↓ ↑) vão ao próximo e ao anterior, **Esc** fecha | v0.3.0 |
+| Buscar texto nas abas Arquivos, Saída, Notícias e Ajuda | Ctrl+F (e F3 / Shift+F3 na barra de busca) | **Ctrl+F**; **Enter**/**F3** e **Shift+F3** (ou ↓ ↑) vão ao próximo e ao anterior, **Esc** fecha | v0.3.0 |
 | Preferências (tema, idioma, ícones) | — (o bectl-gui usa Ctrl+,) | **Alt+,** (Ctrl+, não chega pelo terminal), ou Arquivo → Preferências… | v0.3.0 |
 | Próximo tema | — (o bectl-gui usa Ctrl+Shift+T) | **Alt+T** | v0.3.0 |
-| Notícias | Alt+5 / Ctrl+G | **5** ou **Alt+5** / **Ctrl+G** | a definir |
+| Aba Notícias / buscar as últimas notícias | Alt+5 / Ctrl+G | **5** ou **Alt+5** / **Ctrl+G** | v0.4.0 |
 
 Nos diálogos: <kbd>Tab</kbd> ou as setas mudam o campo, <kbd>Espaço</kbd> marca a
 opção de criar um Boot Environment, <kbd>Enter</kbd> confirma e <kbd>Esc</kbd>

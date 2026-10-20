@@ -10,7 +10,7 @@ void usage()
 {
     std::cout << "uso: octopkg-tui [--remote] [--icons=nerd|unicode|ascii] [--lang=en_US|pt_BR|es_ES]\n"
                  "                  [--elevator=doas|sudo|none] [--config=ARQUIVO] [--pkg=EXECUTÁVEL]\n"
-                 "                  [--bectl=EXECUTÁVEL] [--theme=TEMA] [--version]\n"
+                 "                  [--bectl=EXECUTÁVEL] [--theme=TEMA] [--news=VARIANTE] [--version]\n"
                  "\n"
                  "Interface de terminal para o pkg(8), derivada do OctoPkg. --remote começa\n"
                  "na lista dos repositórios. As operações usam o doas (padrão, se não for root)\n"
@@ -18,7 +18,9 @@ void usage()
                  "(padrão) exigem uma fonte Nerd no terminal, como a JetBrainsMono Nerd Font\n"
                  "Mono (pkg install nerd-fonts-jetbrainsmono). Temas: system, octopkg, frappe,\n"
                  "latte, mocha, macchiato, solarized_dark, solarized_light, selenized_dark,\n"
-                 "selenized_light, dracula, tokyo_night, nord, gruvbox, one_dark.\n";
+                 "selenized_light, dracula, tokyo_night, nord, gruvbox, one_dark. --news escolhe\n"
+                 "o feed da aba Notícias (freebsd, nomadbsd, hardenedbsd, ghostbsd, dragonfly);\n"
+                 "sem ela, a variante vem do uname, como no OctoPkg.\n";
 }
 
 bool option(const char *arg, const char *name, std::string *value)
@@ -56,7 +58,8 @@ int main(int argc, char **argv)
         }
         if (option(a, "--icons", &options.iconMode) || option(a, "--lang", &options.language)
             || option(a, "--config", &options.settingsPath) || option(a, "--pkg", &options.pkgPath)
-            || option(a, "--bectl", &options.bectlPath) || option(a, "--theme", &options.theme))
+            || option(a, "--bectl", &options.bectlPath) || option(a, "--theme", &options.theme)
+            || option(a, "--news", &options.newsFlavour))
             continue;
         std::cerr << "octopkg-tui: opção desconhecida: " << a << "\n\n";
         usage();

@@ -167,6 +167,7 @@ Element tabs(const ViewState &s, HitBoxes *boxes)
         files,
         actions,
         std::string(ic.output) + " " + i18n::tr("Output"),
+        std::string(ic.news) + " " + i18n::tr("News") + (s.newsUnseen ? " *" : ""),
         std::string(ic.help) + " " + i18n::tr("Help"),
     };
     Elements items;
@@ -283,12 +284,13 @@ std::vector<std::pair<std::string, std::string>> helpEntries()
         {"Ctrl+E", i18n::tr("Cancel: clear the marks")},
         {"Ctrl+K", i18n::tr("Check updates (pkg update)")},
         {"Ctrl+U", i18n::tr("Install updates (pkg upgrade)")},
-        {"Ctrl+F", i18n::tr("Find text in the Files, Output and Help tabs (F3: next, Shift+F3: previous)")},
+        {"Ctrl+F", i18n::tr("Find text in the Files, Output, News and Help tabs (F3: next, Shift+F3: previous)")},
+        {"Ctrl+G", i18n::tr("Get the latest news of the system (News tab)")},
         {"Alt+,", i18n::tr("Preferences: theme, language and icons")},
         {"Alt+T", i18n::tr("Next theme")},
         {"F9  Alt+A Alt+C Alt+J", i18n::tr("Menus File, Actions and Help")},
         {"F6", i18n::tr("Choose the sort column (again: reverse; (pkg order): original order)")},
-        {"1 2 3 4 6  Alt+1…Alt+6", i18n::tr("Tabs Info, Files, Actions, Output and Help")},
+        {"1-6  Alt+1…Alt+6", i18n::tr("Tabs Info, Files, Actions, Output, News and Help")},
         {"F1", i18n::tr("Show this help page")},
         {"Enter", i18n::tr("Show the Info tab of the selected package")},
         {"Tab", i18n::tr("Scroll the tab with the arrow keys")},
@@ -331,6 +333,85 @@ Elements actionsLines(const ViewState &s)
     return out;
 }
 
+// Linhas da aba Notícias: o tipo (para o estilo) e o texto, o mesmo para o
+// desenho e para a busca. A descrição é quebrada na largura da aba
+// (contentWidth), para que as linhas desenhadas sejam as que a busca conta.
+enum NewsLine { NewsHeader, NewsTitle, NewsLink, NewsBody, NewsNote, NewsBlank };
+
+// Largura em colunas de um texto UTF-8 (um caractere por coluna).
+size_t columns(const std::string &s)
+{
+    size_t n = 0;
+    for (unsigned char c : s)
+        if ((c & 0xC0) != 0x80)
+            ++n;
+    return n;
+}
+
+std::vector<std::pair<NewsLine, std::string>> newsEntries(const ViewState &s)
+{
+    std::vector<std::pair<NewsLine, std::string>> out;
+    if (s.newsSource.empty()) {
+        out.push_back({NewsNote, i18n::tr("News are available on FreeBSD, NomadBSD, HardenedBSD, GhostBSD and DragonFly BSD.")});
+        return out;
+    }
+    out.push_back({NewsHeader, i18n::trf("%1 news", {s.newsSource})});
+    if (s.newsLoading)
+        out.push_back({NewsNote, i18n::trf("Searching for %1 latest news...", {s.newsSource})});
+    if (!s.newsError.empty())
+        out.push_back({NewsNote, i18n::trf("WARNING: %1", {s.newsError})
+                                     + (s.newsFromCache && !s.news.empty() ? " " + i18n::tr("(showing the saved news)")
+                                                                           : std::string())});
+    if (s.news.empty() && !s.newsLoading)
+        out.push_back({NewsNote, i18n::tr("No news yet. Ctrl+G gets the latest news.")});
+    for (const auto &n : s.news) {
+        // O feed do FreeBSD traz avisos sem título ("New committer: ..."):
+        // a descrição faz as vezes dele.
+        const bool untitled = n.title.empty();
+        const std::string title = untitled ? n.description : n.title;
+        out.push_back({NewsBlank, std::string()});
+        out.push_back({NewsTitle, n.date.empty() ? title : title + "  —  " + n.date});
+        if (!n.link.empty())
+            out.push_back({NewsLink, n.link});
+        // Quebra por palavras, na largura da aba.
+        const size_t width = static_cast<size_t>(std::max(20, s.contentWidth));
+        std::string line;
+        size_t start = 0;
+        const std::string d = untitled ? std::string() : n.description;
+        while (start < d.size()) {
+            size_t end = d.find(' ', start);
+            if (end == std::string::npos)
+                end = d.size();
+            const std::string word = d.substr(start, end - start);
+            if (!line.empty() && columns(line) + 1 + columns(word) > width) {
+                out.push_back({NewsBody, line});
+                line.clear();
+            }
+            line += (line.empty() ? "" : " ") + word;
+            start = end + 1;
+        }
+        if (!line.empty())
+            out.push_back({NewsBody, line});
+    }
+    return out;
+}
+
+Elements newsLines(const ViewState &s)
+{
+    Elements out;
+    for (const auto &e : newsEntries(s)) {
+        switch (e.first) {
+        case NewsHeader: out.push_back(text(e.second) | bold); break;
+        case NewsTitle:  out.push_back(text(e.second) | bold | color(T().cyan)); break;
+        case NewsLink:   out.push_back(text(e.second) | underlined | faint()); break;
+        case NewsNote:   out.push_back(text(e.second) | faint()); break;
+        case NewsBlank:  out.push_back(text("")); break;
+        default:         out.push_back(text(e.second)); break;
+        }
+    }
+    return out;
+}
+
 Elements outputLines(const ViewState &s)
 {
     Elements out;
@@ -346,6 +427,7 @@ Element tabContent(const ViewState &s, HitBoxes *boxes)
     case FilesTab:  lines = filesLines(s); break;
     case ActionsTab: lines = actionsLines(s); break;
     case OutputTab: lines = outputLines(s); break;
+    case NewsTab:   lines = newsLines(s); break;
     case HelpTab:   lines = helpLines(); break;
     default:        lines = infoLines(s); break;
     }
@@ -561,6 +643,10 @@ std::vector<std::string> tabText(const ViewState &s)
     case OutputTab:
         out = s.log;
         break;
+    case NewsTab:
+        for (const auto &e : newsEntries(s))
+            out.push_back(e.second);
+        break;
     case HelpTab:
         for (const auto &e : helpEntries())
             out.push_back(e.first.empty() ? e.second : e.first + "  " + e.second);
@@ -590,7 +676,7 @@ std::vector<int> findLines(const std::vector<std::string> &lines, const std::str
 
 char tabKey(int tab)
 {
-    static const char keys[TabCount] = {'1', '2', '3', '4', '6'};
+    static const char keys[TabCount] = {'1', '2', '3', '4', '5', '6'};
     return tab >= 0 && tab < TabCount ? keys[tab] : '?';
 }
 

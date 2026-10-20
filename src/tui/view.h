@@ -3,6 +3,7 @@
 
 #include "icons.h"
 #include "listmodel.h"
+#include "news.h"
 #include "pkg.h"
 #include "theme.h"
 
@@ -16,13 +17,12 @@
 namespace tui {
 
 /**
- * Abas do OctoPkg presentes nesta versão, com as teclas dele: Alt+1
- * Informação, Alt+2 Arquivos, Alt+3 Ações, Alt+4 Saída e Alt+6 Ajuda. Notícias
- * (5) ainda não existe.
+ * As abas do OctoPkg, com as teclas dele: Alt+1 Informação, Alt+2 Arquivos,
+ * Alt+3 Ações, Alt+4 Saída, Alt+5 Notícias e Alt+6 Ajuda.
  */
-enum Tab { InfoTab = 0, FilesTab, ActionsTab, OutputTab, HelpTab, TabCount };
+enum Tab { InfoTab = 0, FilesTab, ActionsTab, OutputTab, NewsTab, HelpTab, TabCount };
 
-/** Tecla da aba ('1', '2', '3', '4' ou '6'). */
+/** Tecla da aba ('1' a '6'). */
 char tabKey(int tab);
 
 struct DialogField {
@@ -73,6 +73,7 @@ struct ViewState {
     bool contentFocused = false;       // Tab: as setas rolam a aba
     int contentScroll = 0;
     int contentHeight = 12;
+    int contentWidth = 96;             // largura útil das abas (as notícias quebram nela)
     std::vector<std::string> log;      // aba Saída, com horário
     std::string status;
     bool busy = false;
@@ -92,6 +93,13 @@ struct ViewState {
     int findMatch = -1;                // linha do resultado atual; -1 sem resultado
     int findMatchIndex = 0;            // posição dele entre os resultados
     int findCount = 0;
+    // Aba Notícias.
+    std::string newsSource;            // "FreeBSD"; vazio se a variante não tem feed
+    std::vector<octo::NewsItem> news;
+    bool newsLoading = false;
+    bool newsFromCache = false;
+    bool newsUnseen = false;           // há notícias novas que ainda não foram vistas
+    std::string newsError;
 };
 
 /** Posições na tela, para o mouse, e o tamanho do conteúdo da aba. */
@@ -108,8 +116,8 @@ std::string columnTitle(int column);
 std::string statusText(const octo::Package &p);
 
 /**
- * Texto das linhas das abas em que Ctrl+F busca (Arquivos, Saída e Ajuda),
- * uma por linha desenhada; vazio nas outras.
+ * Texto das linhas das abas em que Ctrl+F busca (Arquivos, Saída, Notícias e
+ * Ajuda), uma por linha desenhada; vazio nas outras.
  */
 std::vector<std::string> tabText(const ViewState &state);
 /** Índices das linhas de lines que contêm needle, sem diferenciar maiúsculas. */

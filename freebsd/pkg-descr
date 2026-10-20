@@ -11,6 +11,8 @@ Features:
   (pkg install -n, pkg remove -n) and apply it
 - Upgrade, database sync, cache cleaning, lock and unlock
 - Optional boot environment (bectl) before each transaction
+- The latest news of the system (FreeBSD, NomadBSD, HardenedBSD, GhostBSD,
+  DragonFly BSD), fetched with fetch(1)
 - Privileges through doas or sudo, only for the operations
 - 15 color themes, Nerd Font, Unicode or ASCII icons, and English,
   Brazilian Portuguese and Spanish translations
