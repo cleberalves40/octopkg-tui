@@ -670,7 +670,7 @@ TEST_CASE("menus: limpar o cache, bloquear e Sobre", "[app][menu]")
 
     f.select("curl");
     f.app->handleEvent(Event::Special("\x1b" "c"));   // Alt+C: Ações
-    REQUIRE(f.dialog().menu == 1);
+    REQUIRE(f.dialog().menu == 2);   // Arquivo, Busca, Ações, Ajuda
     for (int i = 0; i < 4; ++i)   // Marcar instalar, remover, (sep), Aplicar, Cancelar, (sep), Bloquear
         f.app->handleEvent(Event::ArrowDown);
     f.app->handleEvent(Event::Return);
@@ -933,4 +933,59 @@ TEST_CASE("aba Notícias sem rede mostra o aviso", "[app][news]")
     const std::string out = draw(s);
     CHECK(out.find("WARNING: Failed to start") != std::string::npos);
     CHECK(out.find("No news yet. Ctrl+G gets the latest news.") != std::string::npos);
+}
+
+// --- v0.5.0: busca por descrição ---
+
+TEST_CASE("F7 alterna a busca por nome e por descrição, e a escolha fica salva", "[app][search]")
+{
+    i18n::setLocale("en_US");
+    AppFixture f;
+    f.app.filterText() = "transfer";   // está no comentário do curl, não no nome
+    CHECK(f.app.viewState().rowCount == 0);
+
+    f.app.handleEvent(Event::F7);
+    tui::ViewState s = f.app.viewState();
+    CHECK(s.searchMode == model::SearchMode::Description);
+    CHECK(s.status == "Search by description (name and comment).");
+    CHECK(f.app.settings().value("search") == "description");
+    f.app.filterText() = "comment";    // sample(): comment = nome + " comment"
+    s = f.app.viewState();
+    CHECK(s.rowCount == 3);
+    f.app.filterText() = "pkg comment";
+    s = f.app.viewState();
+    REQUIRE(s.rowCount == 1);
+    CHECK(s.current.name == "pkg");
+    CHECK(draw(s).find("Description:") != std::string::npos);
+
+    f.app.handleEvent(Event::F7);
+    CHECK(f.app.viewState().searchMode == model::SearchMode::Name);
+    CHECK(f.app.viewState().rowCount == 0);   // "pkg comment" não está no nome
+    CHECK(f.app.settings().value("search") == "name");
+}
+
+TEST_CASE("menu Busca, com o modo atual marcado", "[app][search][menu]")
+{
+    i18n::setLocale("en_US");
+    AppFixture f;
+    f.app.handleEvent(Event::Special("\x1b" "b"));   // Alt+B
+    REQUIRE(f.app.viewState().dialog.kind == tui::Dialog::Menu);
+    CHECK(f.app.viewState().dialog.menu == 1);
+    std::string out = draw(f.app.viewState());
+    CHECK(out.find("• By name") != std::string::npos);
+    f.app.handleEvent(Event::ArrowDown);   // Por descrição
+    f.app.handleEvent(Event::Return);
+    CHECK(f.app.viewState().searchMode == model::SearchMode::Description);
+    f.app.handleEvent(Event::Special("\x1b" "b"));
+    out = draw(f.app.viewState());
+    CHECK(out.find("• By description") != std::string::npos);
+    f.app.handleEvent(Event::Escape);
+
+    // Relido do arquivo, numa nova App.
+    tui::Options o;
+    o.pkgPath = f.dir.file("pkg-nao-usado");
+    o.settingsPath = f.dir.file("config");
+    o.newsFlavour = "freebsd";
+    tui::App again(o);
+    CHECK(again.viewState().searchMode == model::SearchMode::Description);
 }

@@ -276,6 +276,7 @@ std::vector<std::pair<std::string, std::string>> helpEntries()
         {"F5 / Ctrl+R", i18n::tr("Refresh the package list")},
         {"↑ ↓ PgUp PgDn Home End", i18n::tr("Move")},
         {"Ctrl+L  /", i18n::tr("Find a package in the package list")},
+        {"F7", i18n::tr("Search by name or by description (name and comment)")},
         {"Esc  Enter  Ctrl+P", i18n::tr("Go back to the package list")},
         {"i  Alt+I", i18n::tr("Switch between installed and repository packages")},
         {"+  Insert", i18n::tr("Mark the selected package for installation")},
@@ -288,7 +289,7 @@ std::vector<std::pair<std::string, std::string>> helpEntries()
         {"Ctrl+G", i18n::tr("Get the latest news of the system (News tab)")},
         {"Alt+,", i18n::tr("Preferences: theme, language and icons")},
         {"Alt+T", i18n::tr("Next theme")},
-        {"F9  Alt+A Alt+C Alt+J", i18n::tr("Menus File, Actions and Help")},
+        {"F9  Alt+A Alt+B Alt+C Alt+J", i18n::tr("Menus File, Search, Actions and Help")},
         {"F6", i18n::tr("Choose the sort column (again: reverse; (pkg order): original order)")},
         {"1-6  Alt+1…Alt+6", i18n::tr("Tabs Info, Files, Actions, Output, News and Help")},
         {"F1", i18n::tr("Show this help page")},
@@ -717,7 +718,10 @@ Element render(const ViewState &s, Element filter, HitBoxes *boxes)
                                           : std::string(ic.installedView) + " " + i18n::tr("Installed packages");
     Element main = vbox({
         hbox({text(" OctoPkg — pkg(8) ") | bold, text("[" + view + "]") | color(T().cyan), filler(),
-              text(std::string(ic.filter) + " "), filter | size(WIDTH, EQUAL, 30)}),
+              text(std::string(ic.filter) + " "),
+              s.searchMode == model::SearchMode::Description ? text(i18n::tr("Description") + ": ") | faint()
+                                                             : text(""),
+              filter | size(WIDTH, EQUAL, 30)}),
         sep(),
         table(s, boxes) | flex,
         sep(),

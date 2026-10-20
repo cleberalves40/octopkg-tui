@@ -90,6 +90,8 @@ private:
     void actAbout();
     void actPreferences();
     void nextThemeKey();
+    void setSearchMode(model::SearchMode mode);
+    std::string filterPlaceholder() const;
     void openFind();
     void loadNews();
     void refreshNews();
@@ -150,10 +152,13 @@ private:
     std::vector<int> m_rows;
     std::string m_rowsFilter;
     model::SortSpec m_rowsSort{-2, true};
+    model::SearchMode m_rowsMode = model::SearchMode::Name;
     bool m_rowsDirty = true;
 
     std::string m_filter;
+    std::string m_placeholder;                 // do campo de filtro, conforme o modo de busca
     model::SortSpec m_sort;
+    model::SearchMode m_searchMode = model::SearchMode::Name;
     std::string m_selectedName;
     std::string m_shownName;                   // pacote da última tela, para zerar a rolagem
     int m_offset = 0;

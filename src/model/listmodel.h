@@ -21,15 +21,24 @@ struct SortSpec {
     bool operator==(const SortSpec &o) const { return column == o.column && ascending == o.ascending; }
 };
 
+/**
+ * Onde o filtro procura, como o menu Busca do OctoPkg: no nome, ou no nome e
+ * no comentário do pacote (o PackageModel::ctn_PACKAGE_DESCRIPTION_FILTER_NO_COLUMN
+ * do OctoPkg, que junta os dois).
+ */
+enum class SearchMode { Name = 0, Description };
+
 /** Clique no cabeçalho, como no bectl-tui: crescente, decrescente e sem ordem. */
 SortSpec nextOnHeaderClick(SortSpec current, int column);
 
 /**
- * Índices de all que passam no filtro (parte do nome, sem diferenciar
- * maiúsculas), na ordem pedida. Ordenação estável; a do estado segue a ordem
- * do OctoPkg (bloqueado, instalado, não instalado, desatualizado, mais novo).
+ * Índices de all que passam no filtro (parte do nome, ou do nome e do
+ * comentário, sem diferenciar maiúsculas), na ordem pedida. Ordenação
+ * estável; a do estado segue a ordem do OctoPkg (bloqueado, instalado, não
+ * instalado, desatualizado, mais novo).
  */
-std::vector<int> visibleRows(const std::vector<octo::Package> &all, const std::string &filter, SortSpec sort);
+std::vector<int> visibleRows(const std::vector<octo::Package> &all, const std::string &filter, SortSpec sort,
+                             SearchMode mode = SearchMode::Name);
 
 /**
  * Posição a selecionar após atualizar, filtrar ou ordenar: a do pacote que

@@ -38,8 +38,8 @@ instalar e **x** para remover.)
 
 ## Estado
 
-**v0.4.0.** Lista os pacotes instalados e os dos repositórios, com detalhes e
-arquivos; marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da
+**v0.5.0.** Lista os pacotes instalados e os dos repositórios, com detalhes e
+arquivos, e busca por nome ou por descrição (**F7**); marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da
 transação e a executa (**Alt+M**), instala as atualizações (**Ctrl+U**), sincroniza o
 banco (**Ctrl+K**), limpa o cache e bloqueia ou desbloqueia pacotes, com os comandos
 do OctoPkg e, se o sistema usa Boot Environments, a opção de criar um antes. Tem os
@@ -112,8 +112,8 @@ cmake --build build
 Opções: `--remote` (começa na visão Repositório), `--icons=nerd|unicode|ascii`,
 `--lang=en_US|pt_BR|es_ES`, `--theme=TEMA`, `--news=VARIANTE`, `--elevator=doas|sudo|none`,
 `--config=ARQUIVO`, `--pkg=EXECUTÁVEL`, `--bectl=EXECUTÁVEL`, `--version`. As
-preferências ficam em `~/.config/octopkg-tui/config`: a ordem da tabela, o tema, o
-idioma e os ícones (pelo diálogo de Preferências, **Alt+,**), e `elevator`, definido
+preferências ficam em `~/.config/octopkg-tui/config`: a ordem da tabela, o modo de busca, o
+tema, o idioma e os ícones (pelo diálogo de Preferências, **Alt+,**), e `elevator`, definido
 à mão.
 
 Temas, os mesmos do bectl-gui: `system` (as cores do terminal), `octopkg`, `frappe`,
@@ -127,14 +127,15 @@ cores de 24 bits; num terminal com menos, o FTXUI as aproxima.
 |:---|:---|
 | <kbd>F5</kbd> / <kbd>Ctrl+R</kbd> | Atualizar a lista |
 | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>PgUp</kbd> <kbd>PgDn</kbd> <kbd>Home</kbd> <kbd>End</kbd> (ou <kbd>j</kbd> <kbd>k</kbd>) | Mover a seleção |
-| <kbd>Ctrl+L</kbd> / <kbd>/</kbd> | Buscar pelo nome (<kbd>Esc</kbd>, <kbd>Enter</kbd> ou <kbd>Ctrl+P</kbd> volta à lista) |
+| <kbd>Ctrl+L</kbd> / <kbd>/</kbd> | Buscar pelo nome, ou pela descrição (<kbd>Esc</kbd>, <kbd>Enter</kbd> ou <kbd>Ctrl+P</kbd> volta à lista) |
+| <kbd>F7</kbd> | Buscar por nome ou por descrição (nome e comentário), como o menu Busca do OctoPkg |
 | <kbd>i</kbd> / <kbd>Alt+I</kbd> | Alternar entre os pacotes instalados e os dos repositórios |
 | <kbd>+</kbd> / <kbd>Insert</kbd> | Marcar o pacote para instalar (de novo: desmarca) |
 | <kbd>-</kbd> / <kbd>Delete</kbd> | Marcar o pacote para remover |
 | <kbd>Alt+M</kbd> | Aplicar: prévia, confirmação e a transação |
 | <kbd>Ctrl+E</kbd> | Desfazer as marcas |
 | <kbd>Ctrl+U</kbd> / <kbd>Ctrl+K</kbd> | Instalar as atualizações / sincronizar o banco |
-| <kbd>F9</kbd> / <kbd>Alt+A</kbd> <kbd>Alt+C</kbd> <kbd>Alt+J</kbd> | Menus Arquivo, Ações e Ajuda |
+| <kbd>F9</kbd> / <kbd>Alt+A</kbd> <kbd>Alt+B</kbd> <kbd>Alt+C</kbd> <kbd>Alt+J</kbd> | Menus Arquivo, Busca, Ações e Ajuda |
 | <kbd>Ctrl+F</kbd> | Buscar texto nas abas Arquivos, Saída, Notícias e Ajuda (<kbd>F3</kbd> / <kbd>Shift+F3</kbd>: próximo / anterior; <kbd>Esc</kbd> fecha) |
 | <kbd>Ctrl+G</kbd> | Buscar as últimas notícias do sistema (aba Notícias) |
 | <kbd>Alt+,</kbd> / <kbd>Alt+T</kbd> | Preferências (tema, idioma, ícones) / próximo tema |
