@@ -1,0 +1,56 @@
+name: FreeBSD 16-CURRENT
+
+# Homologação no FreeBSD 16.0-CURRENT, nas arquiteturas Tier 1, como no
+# bectl-gui. Nenhuma action oferece o 16-CURRENT: ci/freebsd16-vm.sh usa a
+# imagem oficial de snapshot no QEMU e roda os mesmos testes dos jobs 14.5 e
+# 15.1 (ci/freebsd-ci.sh, com tests/freebsd-e2e.sh, e ci/freebsd-port.sh).
+#
+# Em pull requests e na main, só o amd64 (com KVM, rápido); o aarch64, emulado,
+# leva horas e roda no disparo manual e toda segunda-feira, quando os
+# snapshots do CURRENT já mudaram.
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  freebsd16:
+    name: FreeBSD 16.0-CURRENT / ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON((github.event_name == 'push' || github.event_name == 'pull_request') && '["amd64"]' || '["amd64", "aarch64"]') }}
+
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Enable KVM
+      if: matrix.arch == 'amd64'
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+          | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Install QEMU
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qemu-system-x86 qemu-system-arm qemu-efi-aarch64 qemu-utils genisoimage netcat-openbsd
+
+    - name: Build and test on FreeBSD 16.0-CURRENT/${{ matrix.arch }}
+      run: bash ci/freebsd16-vm.sh ${{ matrix.arch }} HEAD
+
+    - name: Upload console log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: console-${{ matrix.arch }}
+        path: ${{ runner.temp }}/fbsd16-${{ matrix.arch }}/*.log
