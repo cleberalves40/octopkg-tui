@@ -9,7 +9,7 @@ package operations, through doas(1) (the default) or sudo(8):
 and, in %%LOCALBASE%%/etc/doas.conf, for example:
 
   permit persist :wheel cmd %%LOCALBASE%%/sbin/pkg
-  permit persist :wheel cmd bectl
+  permit persist :wheel cmd /sbin/bectl
 
 To use sudo instead, run octopkg-tui --elevator=sudo, or add
 "elevator=sudo" to ~/.config/octopkg-tui/config.
