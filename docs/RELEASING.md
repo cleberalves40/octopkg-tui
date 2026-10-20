@@ -23,9 +23,11 @@ A versão fica em dois arquivos, e o CI reprova se eles divergirem ou se o
    `CHANGELOG.md`, no formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
    com o link de comparação no fim do arquivo.
 2. Abra o pull request. O CI precisa passar no Ubuntu (com os testes também sob ASan e
-   UBSan, e a interface num pseudo-terminal contra o FTXUI 6.1.9) e nos quatro jobs
+   UBSan, e a interface num pseudo-terminal contra o FTXUI 6.1.9), nos quatro jobs
    FreeBSD Tier 1 (14.5 e 15.1, amd64 e aarch64), que incluem a integração com o
-   `pkg(8)` real e a validação do port.
+   `pkg(8)` real e a validação do port, e no FreeBSD 16.0-CURRENT/amd64. Antes de uma
+   versão que mude o comportamento no sistema, rode também o 16.0-CURRENT/aarch64
+   (Actions → FreeBSD 16-CURRENT → Run workflow), que leva mais tempo.
 3. Faça o merge com um *merge commit*.
 4. Depois do CI verde no commit de merge, crie a tag anotada nele e publique a release
    com o texto do CHANGELOG, a tag anterior para rollback e o link de comparação:
