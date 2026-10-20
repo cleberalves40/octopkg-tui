@@ -3,6 +3,7 @@
 
 #include "icons.h"
 #include "listmodel.h"
+#include "news.h"
 #include "pkg.h"
 #include "settings.h"
 #include "view.h"
@@ -31,6 +32,8 @@ struct Options {
     std::string elevator = "-";  // "-": preferência salva, ou doas (vazio se root)
     std::string bectlPath;       // vazio: /sbin/bectl
     std::string theme;           // vazio: preferência salva ou "system"
+    std::string newsFlavour;     // vazio: a variante do sistema (uname); "freebsd"...
+    std::string fetchPath;       // vazio: /usr/bin/fetch
 };
 
 /** Resultado de uma listagem, aplicado na thread da interface. */
@@ -88,6 +91,9 @@ private:
     void actPreferences();
     void nextThemeKey();
     void openFind();
+    void loadNews();
+    void refreshNews();
+    void applyNews(const octo::NewsResult &result);
     void findStep(int delta);
     bool handleFindEvent(const ftxui::Event &event);
     void openMenu(int menu);
@@ -153,6 +159,7 @@ private:
     int m_offset = 0;
     int m_tableHeight = 1000;
     int m_contentHeight = 12;
+    int m_contentWidth = 96;
     int m_tab = InfoTab;
     bool m_contentFocused = false;
     int m_contentScroll = 0;
@@ -169,6 +176,14 @@ private:
     bool m_findOpen = false;                   // Ctrl+F
     std::string m_findText;
     int m_findIndex = 0;                       // resultado atual, entre os encontrados
+
+    octo::NewsFeed m_newsFeed;
+    octo::Flavour m_flavour;
+    octo::NewsResult m_news;
+    bool m_newsStarted = false;                // a aba já foi aberta
+    bool m_newsUnseen = false;
+    std::atomic<bool> m_newsBusy{false};
+    std::thread m_newsWorker;
 
     Dialog m_dialog;
     Op m_onAccept;                             // Confirm

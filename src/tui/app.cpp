@@ -34,6 +34,7 @@ const std::string kAltM = "\x1b" "m";
 const std::string kAltT = "\x1b" "t";
 const std::string kAltComma = "\x1b" ",";
 const std::string kCtrlF = "\x06";
+const std::string kCtrlG = "\x07";
 const std::string kShiftF3 = "\x1b[1;2R";   // xterm; o FTXUI não tem um evento próprio
 
 enum Menus { FileMenu = 0, ActionsMenu, HelpMenu };
@@ -42,6 +43,13 @@ enum Menus { FileMenu = 0, ActionsMenu, HelpMenu };
 constexpr int kFixedLines = 9;
 // Itens de uma lista mostrados no diálogo da transação; a lista completa vai à Saída.
 constexpr size_t kDialogItems = 10;
+
+// O cache das notícias fica ao lado do arquivo de preferências.
+std::string newsCachePath(const std::string &settingsPath)
+{
+    const size_t slash = settingsPath.rfind('/');
+    return (slash == std::string::npos ? std::string(".") : settingsPath.substr(0, slash)) + "/news.xml";
+}
 
 std::string defaultElevator()
 {
@@ -89,6 +97,8 @@ App::App(const Options &options)
     , m_iconMode(iconModeFromString(options.iconMode.empty() ? m_settings.value("icons", "nerd")
                                                              : options.iconMode))
     , m_remoteView(options.remote)
+    , m_newsFeed(newsCachePath(m_settings.path()), options.fetchPath)
+    , m_flavour(options.newsFlavour.empty() ? octo::systemFlavour() : octo::flavourFromString(options.newsFlavour))
 {
     const std::string lang = options.language.empty() ? m_settings.value("language", "system")
                                                       : options.language;
@@ -106,6 +116,8 @@ App::App(const Options &options)
 
 App::~App()
 {
+    if (m_newsWorker.joinable())
+        m_newsWorker.join();
     if (m_worker.joinable())
         m_worker.join();
     if (m_detailWorker.joinable())
@@ -240,7 +252,10 @@ void App::layout()
 {
     if (!m_screen)
         return;
-    const int height = Terminal::Size().dimy;
+    const auto size = Terminal::Size();
+    const int height = size.dimy;
+    // Sobra espaço para o indicador de posição ("12/345") da aba com foco.
+    m_contentWidth = std::max(20, size.dimx - 9);
     const int free = std::max(2, height - kFixedLines);
     m_contentHeight = std::max(3, std::min(16, free * 2 / 5));
     m_tableHeight = std::max(1, free - m_contentHeight);
@@ -333,6 +348,7 @@ ViewState App::viewState()
     s.contentFocused = m_contentFocused;
     s.contentScroll = m_contentScroll;
     s.contentHeight = m_contentHeight;
+    s.contentWidth = m_contentWidth;
     s.log = m_log;
     s.status = m_status;
     s.busy = m_busy;
@@ -346,6 +362,12 @@ ViewState App::viewState()
     s.toRemove = m_toRemove;
     s.dialog = m_dialog;
     s.themeId = m_themeId;
+    s.newsSource = octo::flavourName(m_flavour);
+    s.news = m_news.items;
+    s.newsLoading = m_newsBusy;
+    s.newsFromCache = m_news.fromCache;
+    s.newsError = m_news.error;
+    s.newsUnseen = m_newsUnseen;
     s.findOpen = m_findOpen;
     s.findText = m_findText;
     if (m_findOpen && !m_findText.empty()) {
@@ -391,6 +413,11 @@ void App::scrollContent(int delta)
 void App::setTab(int tab)
 {
     m_tab = tab;
+    if (tab == NewsTab) {
+        m_newsUnseen = false;
+        if (!m_newsStarted)
+            loadNews();
+    }
     m_contentScroll = 0;
     if (tab == OutputTab && m_contentFocused)
         m_contentScroll = std::max(0, static_cast<int>(m_log.size()) - m_contentHeight);
@@ -751,11 +778,59 @@ void App::actPreferences()
     m_dialog.focus = 0;
 }
 
+// ---------------------------------------------------------------------------
+// Notícias (aba 5, Ctrl+G), como no OctoPkg
+// ---------------------------------------------------------------------------
+
+void App::loadNews()
+{
+    // Na primeira visita: as do cache na hora, e as novas em segundo plano.
+    m_newsStarted = true;
+    m_news = m_newsFeed.cached();
+    refreshNews();
+}
+
+void App::refreshNews()
+{
+    m_newsStarted = true;
+    if (m_newsBusy)
+        return;
+    if (octo::newsUrl(m_flavour).empty()) {
+        m_news = m_newsFeed.cached();
+        return;
+    }
+    log(i18n::trf("Searching for %1 latest news...", {octo::flavourName(m_flavour)}));
+    m_newsBusy = true;
+    if (!m_screen) {   // testes
+        applyNews(m_newsFeed.refresh(m_flavour));
+        return;
+    }
+    if (m_newsWorker.joinable())
+        m_newsWorker.join();
+    m_newsWorker = std::thread([this] {
+        const octo::NewsResult r = m_newsFeed.refresh(m_flavour);
+        m_screen->Post([this, r] { applyNews(r); });
+        m_screen->PostEvent(Event::Custom);
+    });
+}
+
+void App::applyNews(const octo::NewsResult &result)
+{
+    m_newsBusy = false;
+    m_news = result;
+    if (!result.error.empty())
+        log(i18n::trf("WARNING: %1", {result.error}));
+    else
+        log(i18n::trf("%1 news: %2 item(s).", {octo::flavourName(m_flavour), std::to_string(result.items.size())}));
+    if (result.updated && m_tab != NewsTab)
+        m_newsUnseen = true;
+}
+
 void App::openFind()
 {
-    // Como o Ctrl+F do OctoPkg: nas abas Arquivos, Saída e Ajuda.
-    if (m_tab != FilesTab && m_tab != OutputTab && m_tab != HelpTab) {
-        m_status = i18n::tr("Find works in the Files, Output and Help tabs.");
+    // Como o Ctrl+F do OctoPkg: nas abas Arquivos, Saída, Notícias e Ajuda.
+    if (m_tab != FilesTab && m_tab != OutputTab && m_tab != NewsTab && m_tab != HelpTab) {
+        m_status = i18n::tr("Find works in the Files, Output, News and Help tabs.");
         return;
     }
     m_findOpen = true;
@@ -1027,6 +1102,7 @@ void App::openMenu(int menu)
          {i18n::tr("Check updates"), "Ctrl+K"},
          {i18n::tr("Install updates"), "Ctrl+U"},
          {i18n::tr("Clean the local cache"), ""},
+         {i18n::tr("Get the latest news"), "Ctrl+G"},
          sep,
          {i18n::tr("Preferences…"), "Alt+,"},
          {i18n::tr("Next theme"), "Alt+T"},
@@ -1044,7 +1120,8 @@ void App::openMenu(int menu)
     };
     m_menuActions = {
         {[this] { refresh(); }, [this] { toggleView(); }, nullptr, [this] { actUpdate(); },
-         [this] { actUpgrade(); }, [this] { actClean(); }, nullptr, [this] { actPreferences(); },
+         [this] { actUpgrade(); }, [this] { actClean(); },
+         [this] { setTab(NewsTab); refreshNews(); }, nullptr, [this] { actPreferences(); },
          [this] { nextThemeKey(); }, nullptr, [this] { quit(); }},
         {[this] { markInstall(); }, [this] { markRemove(); }, nullptr, [this] { actApply(); },
          [this] { clearMarks(); }, nullptr, [this] { actLock(true); }, [this] { actLock(false); }},
@@ -1302,6 +1379,12 @@ bool App::handleEvent(const Event &event)
         openFind();
         return true;
     }
+    if (raw == kCtrlG) {
+        setTab(NewsTab);
+        if (m_newsStarted && !m_newsBusy)
+            refreshNews();
+        return true;
+    }
     if (raw == kAltT) {
         nextThemeKey();
         return true;
@@ -1338,8 +1421,6 @@ bool App::handleEvent(const Event &event)
                 tab = t;
         if (tab >= 0)
             setTab(tab);
-        else
-            m_status = i18n::tr("This tab is not available yet.");
         return true;
     }
     if (event == Event::Tab || event == Event::TabReverse) {
@@ -1401,6 +1482,8 @@ int App::run()
 
     screen.Loop(root);
 
+    if (m_newsWorker.joinable())
+        m_newsWorker.join();
     if (m_worker.joinable())
         m_worker.join();
     if (m_detailWorker.joinable())

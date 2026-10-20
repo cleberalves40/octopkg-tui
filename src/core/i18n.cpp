@@ -156,7 +156,6 @@ const Entry kEntries[] = {
     {"Keyboard shortcuts", "Atalhos de teclado", "Atajos de teclado"},
     {"About", "Sobre", "Acerca de"},
     {"Based on OctoPkg, © Alexandre Albuquerque Arnt", "Baseado no OctoPkg, © Alexandre Albuquerque Arnt", "Basado en OctoPkg, © Alexandre Albuquerque Arnt"},
-    {"This tab is not available yet.", "Esta aba ainda não está disponível.", "Esta pestaña aún no está disponible."},
     {"Mark the selected package for installation", "Marcar o pacote selecionado para instalar", "Marcar el paquete seleccionado para instalar"},
     {"Mark the selected package for removal", "Marcar o pacote selecionado para remover", "Marcar el paquete seleccionado para eliminar"},
     {"Apply: install and remove the marked packages", "Aplicar: instalar e remover os pacotes marcados", "Aplicar: instalar y eliminar los paquetes marcados"},
@@ -164,7 +163,6 @@ const Entry kEntries[] = {
     {"Check updates (pkg update)", "Procurar atualizações (pkg update)", "Buscar actualizaciones (pkg update)"},
     {"Install updates (pkg upgrade)", "Instalar as atualizações (pkg upgrade)", "Instalar las actualizaciones (pkg upgrade)"},
     {"Menus File, Actions and Help", "Menus Arquivo, Ações e Ajuda", "Menús Archivo, Acciones y Ayuda"},
-    {"Tabs Info, Files, Actions, Output and Help", "Abas Informação, Arquivos, Ações, Saída e Ajuda", "Pestañas Información, Archivos, Acciones, Salida y Ayuda"},
 
     {"Preferences", "Preferências", "Preferencias"},
     {"Preferences…", "Preferências…", "Preferencias…"},
@@ -183,8 +181,20 @@ const Entry kEntries[] = {
     {"Find:", "Buscar:", "Buscar:"},
     {"Not found", "Não encontrado", "No encontrado"},
     {"Enter/F3: next  Shift+F3: previous  Esc: close", "Enter/F3: próximo  Shift+F3: anterior  Esc: fechar", "Enter/F3: siguiente  Shift+F3: anterior  Esc: cerrar"},
-    {"Find text in the Files, Output and Help tabs (F3: next, Shift+F3: previous)", "Buscar texto nas abas Arquivos, Saída e Ajuda (F3: próximo, Shift+F3: anterior)", "Buscar texto en las pestañas Archivos, Salida y Ayuda (F3: siguiente, Shift+F3: anterior)"},
-    {"Find works in the Files, Output and Help tabs.", "A busca funciona nas abas Arquivos, Saída e Ajuda.", "La búsqueda funciona en las pestañas Archivos, Salida y Ayuda."},
+
+    {"News", "Notícias", "Noticias"},
+    {"%1 news", "Notícias do %1", "Noticias de %1"},
+    {"Searching for %1 latest news...", "Buscando as últimas notícias do %1...", "Buscando las últimas noticias de %1..."},
+    {"%1 news: %2 item(s).", "Notícias do %1: %2 item(ns).", "Noticias de %1: %2 elemento(s)."},
+    {"(showing the saved news)", "(mostrando as notícias salvas)", "(mostrando las noticias guardadas)"},
+    {"No news yet. Ctrl+G gets the latest news.", "Nenhuma notícia ainda. Ctrl+G busca as últimas.", "Todavía no hay noticias. Ctrl+G busca las últimas."},
+    {"News are available on FreeBSD, NomadBSD, HardenedBSD, GhostBSD and DragonFly BSD.", "As notícias estão disponíveis no FreeBSD, NomadBSD, HardenedBSD, GhostBSD e DragonFly BSD.", "Las noticias están disponibles en FreeBSD, NomadBSD, HardenedBSD, GhostBSD y DragonFly BSD."},
+    {"The news feed could not be read.", "Não foi possível ler o feed de notícias.", "No se pudo leer el feed de noticias."},
+    {"Get the latest news", "Buscar as últimas notícias", "Buscar las últimas noticias"},
+    {"Get the latest news of the system (News tab)", "Buscar as últimas notícias do sistema (aba Notícias)", "Buscar las últimas noticias del sistema (pestaña Noticias)"},
+    {"Find text in the Files, Output, News and Help tabs (F3: next, Shift+F3: previous)", "Buscar texto nas abas Arquivos, Saída, Notícias e Ajuda (F3: próximo, Shift+F3: anterior)", "Buscar texto en las pestañas Archivos, Salida, Noticias y Ayuda (F3: siguiente, Shift+F3: anterior)"},
+    {"Find works in the Files, Output, News and Help tabs.", "A busca funciona nas abas Arquivos, Saída, Notícias e Ajuda.", "La búsqueda funciona en las pestañas Archivos, Salida, Noticias y Ayuda."},
+    {"Tabs Info, Files, Actions, Output, News and Help", "Abas Informação, Arquivos, Ações, Saída, Notícias e Ajuda", "Pestañas Información, Archivos, Acciones, Salida, Noticias y Ayuda"},
 };
 
 const Catalog &catalog(const std::string &loc)

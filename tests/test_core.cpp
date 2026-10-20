@@ -3,6 +3,7 @@
 // qualquer sistema.
 
 #include "i18n.h"
+#include "news.h"
 #include "pkg.h"
 #include "process.h"
 #include "settings.h"
@@ -619,4 +620,137 @@ TEST_CASE("a saída chega aos poucos", "[process]")
     CHECK(chunks.front() == "um\n");
     CHECK(r.out == "um\n");
     CHECK(r.err == "dois\n");
+}
+
+// --- v0.4.0: notícias ---
+
+namespace {
+
+// Trecho no formato do https://www.freebsd.org/news/feed.xml: descrição em HTML
+// escapado, CDATA, entidades e um <link> em cada item.
+const char kFeed[] =
+    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+    "<rss version=\"2.0\"><channel><title>FreeBSD News Flash</title>\n"
+    "<link>https://www.freebsd.org/news/newsflash/</link>\n"
+    "<item><title>FreeBSD 15.1-RELEASE Available</title>\n"
+    "<link>https://www.freebsd.org/releases/15.1R/announce/</link>\n"
+    "<description>&lt;p&gt;FreeBSD 15.1-RELEASE is now   available.\n Please be sure to check the "
+    "&lt;a href=\"x\"&gt;Release Notes&lt;/a&gt; &amp;amp; Errata.&lt;/p&gt;</description>\n"
+    "<pubDate>Tue, 02 Jun 2026 00:00:00 +0000</pubDate></item>\n"
+    "<item><title><![CDATA[Ports & Packages: Q3 report]]></title>\n"
+    "<link>https://www.freebsd.org/status/</link>\n"
+    "<description><![CDATA[<b>Status</b> report &amp; more]]></description>\n"
+    "<pubDate>Mon, 05 Oct 2026 10:00:00 -0300</pubDate></item>\n"
+    "<item><title>Caf&#233; &#x2014; 3 &lt; 4</title><description>x</description></item>\n"
+    "</channel></rss>\n";
+
+std::string feed(int items)
+{
+    std::string x = "<rss><channel>";
+    for (int i = 0; i < items; ++i)
+        x += "<item><title>N" + std::to_string(i) + "</title><description>d</description></item>";
+    return x + "</channel></rss>";
+}
+
+// fetch(1) falso: grava em -o o arquivo de origem e registra os argumentos.
+std::string fakeFetch(const TempDir &dir, const std::string &source, int status = 0)
+{
+    const std::string path = dir.file("fetch-" + std::to_string(status));
+    writeExecutable(path, "#!/bin/sh\necho \"$*\" >> '" + dir.file("fetch.log") + "'\n"
+                          "while [ $# -gt 1 ]; do [ \"$1\" = -o ] && out=$2; shift; done\n"
+                          "[ " + std::to_string(status) + " -ne 0 ] && { echo 'fetch: Not Found' >&2; exit " +
+                          std::to_string(status) + "; }\ncp '" + source + "' \"$out\"\n");
+    return path;
+}
+
+} // namespace
+
+TEST_CASE("lê o feed RSS como o OctoPkg", "[news]")
+{
+    const auto items = octo::parseRss(kFeed);
+    REQUIRE(items.size() == 3);
+    CHECK(items[0].title == "FreeBSD 15.1-RELEASE Available");
+    CHECK(items[0].link == "https://www.freebsd.org/releases/15.1R/announce/");
+    CHECK(items[0].description
+          == "FreeBSD 15.1-RELEASE is now available. Please be sure to check the Release Notes & Errata.");
+    CHECK(items[0].date == "Tue, 02 Jun 2026 00:00:00");   // sem o fuso, como no OctoPkg
+    CHECK(items[1].title == "Ports & Packages: Q3 report");
+    CHECK(items[1].description == "Status report & more");
+    CHECK(items[1].date == "Mon, 05 Oct 2026 10:00:00");
+    CHECK(items[2].title == "Café — 3 < 4");
+    CHECK(items[2].link.empty());
+    CHECK(octo::parseRss(feed(15)).size() == 10);   // as 10 últimas
+    CHECK(octo::parseRss(feed(15), 3).size() == 3);
+    CHECK(octo::parseRss("<html>não é um feed</html>").empty());
+}
+
+TEST_CASE("variante do sistema e o feed de cada uma", "[news]")
+{
+    using octo::Flavour;
+    CHECK(octo::detectFlavour("FreeBSD host 15.1-RELEASE FreeBSD 15.1-RELEASE amd64", false) == Flavour::FreeBSD);
+    CHECK(octo::detectFlavour("FreeBSD host 14.3-STABLE FreeBSD HBSD amd64", false) == Flavour::HardenedBSD);
+    CHECK(octo::detectFlavour("FreeBSD nomad 14.2 NomadBSD amd64", false) == Flavour::NomadBSD);
+    CHECK(octo::detectFlavour("FreeBSD ghost 14.1 FreeBSD amd64", true) == Flavour::GhostBSD);
+    CHECK(octo::detectFlavour("DragonFly df 6.4-RELEASE DragonFly v6.4.0", false) == Flavour::DragonFly);
+    CHECK(octo::detectFlavour("Darwin mac 25.0.0 Darwin Kernel", false) == Flavour::Unknown);
+    CHECK(octo::newsUrl(Flavour::FreeBSD) == "https://www.freebsd.org/news/feed.xml");
+    CHECK(octo::newsUrl(Flavour::NomadBSD) == octo::newsUrl(Flavour::FreeBSD));
+    CHECK(octo::newsUrl(Flavour::Unknown).empty());
+    CHECK(octo::flavourFromString("ghostbsd") == Flavour::GhostBSD);
+    CHECK(octo::flavourName(Flavour::DragonFly) == "DragonFly BSD");
+}
+
+TEST_CASE("baixa o feed com o fetch, guarda e avisa o que mudou", "[news]")
+{
+    i18n::setLocale("en_US");
+    TempDir dir;
+    std::ofstream(dir.file("feed.xml")) << kFeed;
+    const std::string cache = dir.file("sub/news.xml");
+    octo::NewsFeed news(cache, fakeFetch(dir, dir.file("feed.xml")));
+    CHECK(news.cached().items.empty());   // ainda sem cache
+
+    octo::NewsResult r = news.refresh(octo::Flavour::FreeBSD);
+    CHECK(r.error.empty());
+    CHECK(r.updated);
+    CHECK_FALSE(r.fromCache);
+    REQUIRE(r.items.size() == 3);
+    CHECK(readFile(cache) == kFeed);
+    CHECK(readLines(dir.file("fetch.log")).front()
+          == "-q -T 30 -o " + cache + ".tmp https://www.freebsd.org/news/feed.xml");
+
+    // O mesmo feed de novo: nada mudou.
+    r = news.refresh(octo::Flavour::FreeBSD);
+    CHECK_FALSE(r.updated);
+    CHECK(news.cached().items.size() == 3);
+}
+
+TEST_CASE("sem rede ou com feed inválido, fica o cache", "[news]")
+{
+    i18n::setLocale("en_US");
+    TempDir dir;
+    std::ofstream(dir.file("news.xml")) << kFeed;   // o cache de antes
+    std::ofstream(dir.file("ruim.xml")) << "<html>erro do proxy</html>";
+    SECTION("fetch falha")
+    {
+        octo::NewsFeed news(dir.file("news.xml"), fakeFetch(dir, dir.file("feed.xml"), 1));
+        const octo::NewsResult r = news.refresh(octo::Flavour::FreeBSD);
+        CHECK(r.error == "fetch: Not Found");
+        CHECK(r.fromCache);
+        CHECK(r.items.size() == 3);
+    }
+    SECTION("feed que não dá para ler não substitui o cache")
+    {
+        octo::NewsFeed news(dir.file("news.xml"), fakeFetch(dir, dir.file("ruim.xml")));
+        const octo::NewsResult r = news.refresh(octo::Flavour::FreeBSD);
+        CHECK(r.error == "The news feed could not be read.");
+        CHECK(r.items.size() == 3);
+        CHECK(readFile(dir.file("news.xml")) == kFeed);
+    }
+    SECTION("variante sem feed")
+    {
+        octo::NewsFeed news(dir.file("news.xml"), fakeFetch(dir, dir.file("feed.xml")));
+        const octo::NewsResult r = news.refresh(octo::Flavour::Unknown);
+        CHECK_FALSE(r.error.empty());
+        CHECK(readLines(dir.file("fetch.log")).empty());   // nem tentou baixar
+    }
 }

@@ -109,6 +109,9 @@ struct AppFixture {
               o.iconMode = "ascii";
               o.language = "en_US";
               o.settingsPath = dir.file("config");
+              // Sem rede nos testes: a variante é fixa e o fetch é o falso de fetch.sh.
+              o.newsFlavour = "freebsd";
+              o.fetchPath = dir.file("fetch.sh");
               return o;
           }())
     {
@@ -130,7 +133,7 @@ TEST_CASE("tela mostra colunas, linhas e estado", "[view]")
     const std::string out = draw(f.app.viewState());
     for (const char *t : {"OctoPkg", "[# Installed packages]", "Name ^", "Version", "Size", "Installed on", "curl",
                           "ca_root_nss", "4.00 MiB", "25.00 MiB", "Ready.", "3 package(s)", "1 outdated", "1 i Info",
-                          "2 f Files", "3 a Actions", "4 > Output", "6 ? Help", "F1", "F5", "F9", "F10"})
+                          "2 f Files", "3 a Actions", "4 > Output", "5 n News", "6 ? Help", "F1", "F5", "F9", "F10"})
         CHECK_INFO(out, t);
     // Ordem pelo nome; ca_root_nss é dependência ("d"), curl desatualizado ("U").
     CHECK(out.find("ca_root_nss") < out.find("curl"));
@@ -323,9 +326,8 @@ TEST_CASE("atalhos de busca, abas e foco", "[app]")
     CHECK(f.app.viewState().tab == tui::HelpTab);
     f.app.handleEvent(Event::Character('3'));                  // Ações
     CHECK(f.app.viewState().tab == tui::ActionsTab);
-    f.app.handleEvent(Event::Special("\x1b" "5"));             // Notícias: ainda não existe
-    CHECK(f.app.viewState().tab == tui::ActionsTab);
-    CHECK(f.app.viewState().status == "This tab is not available yet.");
+    f.app.handleEvent(Event::Special("\x1b" "5"));             // Notícias
+    CHECK(f.app.viewState().tab == tui::NewsTab);
     f.app.handleEvent(Event::Return);                          // Enter: aba Informação
     CHECK(f.app.viewState().tab == tui::InfoTab);
     f.app.handleEvent(Event::F1);
@@ -406,6 +408,8 @@ struct OpsFixture {
         o.iconMode = "ascii";
         o.language = "en_US";
         o.settingsPath = dir.file("config");
+        o.newsFlavour = "freebsd";
+        o.fetchPath = dir.file("fetch-nao-existe");
         app = std::make_unique<tui::App>(o);
         app->refresh();   // sem tela, roda na hora
     }
@@ -821,7 +825,7 @@ TEST_CASE("Ctrl+F busca nas abas Arquivos, Saída e Ajuda", "[app][find]")
     // Na aba Informação, não há onde buscar.
     f.app.handleEvent(Event::Special("\x06"));
     CHECK_FALSE(f.app.viewState().findOpen);
-    CHECK(f.app.viewState().status == "Find works in the Files, Output and Help tabs.");
+    CHECK(f.app.viewState().status == "Find works in the Files, Output, News and Help tabs.");
 
     f.app.handleEvent(Event::Character('2'));
     f.app.handleEvent(Event::Special("\x06"));
@@ -864,4 +868,69 @@ TEST_CASE("Ctrl+F busca nas abas Arquivos, Saída e Ajuda", "[app][find]")
     for (char c : std::string("Ctrl+F"))
         f.app.handleEvent(Event::Character(c));
     CHECK(f.app.viewState().findCount >= 1);
+}
+
+// --- v0.4.0: aba Notícias ---
+
+TEST_CASE("aba Notícias: cache na hora, Ctrl+G baixa de novo, e a busca funciona", "[app][news]")
+{
+    i18n::setLocale("en_US");
+    AppFixture f;
+    std::ofstream(f.dir.file("feed.xml"))
+        << "<rss><channel><item><title>FreeBSD 15.1-RELEASE Available</title>"
+           "<link>https://www.freebsd.org/releases/15.1R/announce/</link>"
+           "<description>The FreeBSD Release Engineering Team is pleased to announce the availability of "
+           "FreeBSD 15.1-RELEASE, the second release of the stable/15 branch, with many improvements "
+           "and new features for everyone.</description><pubDate>Tue, 02 Jun 2026 00:00:00 +0000</pubDate>"
+           "</item><item><title>Ports status</title><description>ok</description></item>"
+           "<item><description>New committer: Boris Lytochkin (src)</description>"
+           "<pubDate>02 Oct 26 00:00 UTC</pubDate></item></channel></rss>";
+    writeExecutable(f.dir.file("fetch.sh"), "#!/bin/sh\necho \"$*\" >> '" + f.dir.file("fetch.log") + "'\n"
+                                            "while [ $# -gt 1 ]; do [ \"$1\" = -o ] && out=$2; shift; done\n"
+                                            "cp '" + f.dir.file("feed.xml") + "' \"$out\"\n");
+
+    f.app.handleEvent(Event::Character('5'));
+    tui::ViewState s = f.app.viewState();
+    CHECK(s.tab == tui::NewsTab);
+    REQUIRE(s.news.size() == 3);   // sem tela, o download roda na hora
+    CHECK(readLines(f.dir.file("fetch.log")).size() == 1);
+    std::string out = draw(s);
+    for (const char *t : {"FreeBSD news", "FreeBSD 15.1-RELEASE Available  —  Tue, 02 Jun 2026 00:00:00",
+                          "https://www.freebsd.org/releases/15.1R/announce/", "The FreeBSD Release Engineering",
+                          "New committer: Boris Lytochkin (src)  —  02 Oct 26 00:00 UTC"})
+        CHECK_INFO(out, t);
+    // A descrição longa é quebrada na largura da aba.
+    s.contentWidth = 40;
+    for (const auto &l : tui::tabText(s))
+        if (l.rfind("https://", 0) != 0 && l.find("  —  ") == std::string::npos)
+            CHECK(l.size() <= 40);
+
+    // Voltar à aba não baixa de novo; Ctrl+G, sim.
+    f.app.handleEvent(Event::Character('1'));
+    f.app.handleEvent(Event::Character('5'));
+    CHECK(readLines(f.dir.file("fetch.log")).size() == 1);
+    f.app.handleEvent(Event::Special("\x07"));   // Ctrl+G
+    CHECK(readLines(f.dir.file("fetch.log")).size() == 2);
+
+    f.app.handleEvent(Event::Special("\x06"));   // Ctrl+F
+    for (char c : std::string("stable/15"))
+        f.app.handleEvent(Event::Character(c));
+    CHECK(f.app.viewState().findCount == 1);
+    f.app.handleEvent(Event::Escape);
+
+    // O cache ficou ao lado das preferências.
+    CHECK(readFile(f.dir.file("news.xml")).find("Ports status") != std::string::npos);
+}
+
+TEST_CASE("aba Notícias sem rede mostra o aviso", "[app][news]")
+{
+    i18n::setLocale("en_US");
+    AppFixture f;   // fetch.sh não existe
+    f.app.handleEvent(Event::Special("\x1b" "5"));
+    const tui::ViewState s = f.app.viewState();
+    CHECK(s.news.empty());
+    CHECK_FALSE(s.newsError.empty());
+    const std::string out = draw(s);
+    CHECK(out.find("WARNING: Failed to start") != std::string::npos);
+    CHECK(out.find("No news yet. Ctrl+G gets the latest news.") != std::string::npos);
 }

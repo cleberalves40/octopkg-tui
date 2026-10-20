@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(octopkg_tui VERSION 0.3.1 LANGUAGES CXX)
+project(octopkg_tui VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,6 +32,7 @@ endif()
 add_library(octopkg_core STATIC
     src/core/process.cpp
     src/core/pkg.cpp
+    src/core/news.cpp
     src/core/i18n.cpp
     src/core/settings.cpp
     src/model/listmodel.cpp

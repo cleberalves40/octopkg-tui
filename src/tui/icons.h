@@ -26,6 +26,7 @@ struct IconSet {
     const char *files;
     const char *actions;
     const char *output;
+    const char *news;
     const char *help;
     const char *filter;
     const char *sortAscending;

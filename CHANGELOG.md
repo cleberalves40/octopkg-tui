@@ -5,6 +5,31 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto usa [versionamento semântico](https://semver.org/lang/pt-BR/),
 com tags no formato `vX.Y.Z`.
 
+## [0.4.0] - 2026-10-20
+
+A aba Notícias: agora todas as abas do OctoPkg estão no terminal.
+
+### Adicionado
+- Aba **Notícias** (**5** ou **Alt+5**), como no OctoPkg: as 10 últimas notícias da
+  variante do sistema (FreeBSD, NomadBSD, HardenedBSD, GhostBSD ou DragonFly BSD,
+  detectada pelo `uname -a` e pelo `/etc/rc.conf.ghostbsd`, como no OctoPkg), com
+  título, data, link e descrição. **Ctrl+G** ou Arquivo → Buscar as últimas notícias
+  baixa de novo.
+- O feed é baixado com o `fetch(1)` do sistema base, que confere o certificado TLS
+  (o OctoPkg usa `curl -k`, que não confere), e fica em
+  `~/.config/octopkg-tui/news.xml`: na primeira visita à aba, as notícias salvas
+  aparecem na hora e as novas chegam em segundo plano. Sem rede, ou com um feed que
+  não dá para ler, ficam as salvas, com o aviso. Notícias novas marcam a aba com `*`.
+- O leitor de RSS trata HTML escapado e CDATA, entidades (`&amp;`, `&#233;`...) e
+  os avisos sem título do feed do FreeBSD ("New committer: ..."), que usam a
+  descrição como título. A descrição é quebrada na largura do terminal.
+- **Ctrl+F** busca também na aba Notícias.
+- Opção `--news=freebsd|nomadbsd|hardenedbsd|ghostbsd|dragonfly`, para escolher o
+  feed quando a detecção não acerta.
+- Testes: o leitor de RSS (incluindo o formato do feed do FreeBSD), a detecção da
+  variante, o download com um fetch falso (cache, mudança, falha e feed inválido) e
+  a aba dirigida por teclas; no FreeBSD, a integração baixa o feed de verdade.
+
 ## [0.3.1] - 2026-10-20
 
 Empacotamento: o port FreeBSD.
@@ -126,6 +151,7 @@ Primeira versão: somente leitura.
 - Compatível com o FTXUI 6.1.9 e 7.x: a primeira listagem parte de dentro do
   laço de eventos, porque o FTXUI 6 descarta tarefas enviadas antes dele.
 
+[0.4.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/cleberalves40/octopkg-tui/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.1.0...v0.2.0
