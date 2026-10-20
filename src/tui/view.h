@@ -22,6 +22,12 @@ namespace tui {
  */
 enum Tab { InfoTab = 0, FilesTab, ActionsTab, OutputTab, NewsTab, HelpTab, TabCount };
 
+/**
+ * Disposição da tela, como o F10/F11 do OctoPkg (maximizar a lista ou as
+ * abas); aqui, F11 ou Alt+Z passa de uma à outra.
+ */
+enum class Layout { Normal = 0, ListOnly, TabsOnly };
+
 /** Tecla da aba ('1' a '6'). */
 char tabKey(int tab);
 
@@ -78,7 +84,8 @@ struct ViewState {
     bool contentFocused = false;       // Tab: as setas rolam a aba
     int contentScroll = 0;
     int contentHeight = 12;
-    int contentWidth = 96;             // largura útil das abas (as notícias quebram nela)
+    int contentWidth = 96;
+    Layout layout = Layout::Normal;             // largura útil das abas (as notícias quebram nela)
     std::vector<std::string> log;      // aba Saída, com horário
     std::string status;
     bool busy = false;

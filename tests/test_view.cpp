@@ -1079,3 +1079,45 @@ TEST_CASE("categorias pelo menu Busca, e sem pacotes não quebra", "[app][catego
     empty.app.handleEvent(Event::Escape);
     CHECK_FALSE(empty.app.viewState().categoryChooserOpen);
 }
+
+// --- v0.7.0: maximizar a lista ou as abas ---
+
+TEST_CASE("F11 e Alt+Z: só a lista, só as abas, e as duas", "[app][layout]")
+{
+    i18n::setLocale("en_US");
+    AppFixture f;
+    f.app.handleEvent(Event::ArrowDown);   // curl
+    f.app.applyDetails(f.app.currentDetailsKey(), curlDetails(), "");
+    CHECK(f.app.viewState().layout == tui::Layout::Normal);
+
+    f.app.handleEvent(Event::F11);
+    tui::ViewState s = f.app.viewState();
+    CHECK(s.layout == tui::Layout::ListOnly);
+    CHECK(s.status == "Package list maximized (F11: tabs).");
+    std::string out = draw(s);
+    CHECK(out.find("ca_root_nss") != std::string::npos);
+    CHECK(out.find("1 i Info") == std::string::npos);    // sem as abas
+    CHECK(out.find("ftp/curl") == std::string::npos);
+    f.app.handleEvent(Event::ArrowDown);                  // as setas movem a seleção
+    CHECK(f.app.viewState().current.name == "pkg");
+    f.app.handleEvent(Event::ArrowUp);
+
+    f.app.handleEvent(Event::Special("\x1b" "z"));       // Alt+Z
+    s = f.app.viewState();
+    CHECK(s.layout == tui::Layout::TabsOnly);
+    CHECK(s.contentFocused);                              // as setas rolam a aba
+    out = draw(s);
+    CHECK(out.find("1 i Info") != std::string::npos);
+    CHECK(out.find("ftp/curl") != std::string::npos);
+    CHECK(out.find("Name ^") == std::string::npos);       // sem a lista
+    f.app.handleEvent(Event::ArrowDown);
+    CHECK(f.app.viewState().current.name == "curl");      // a seleção não mudou
+
+    f.app.handleEvent(Event::F11);
+    s = f.app.viewState();
+    CHECK(s.layout == tui::Layout::Normal);
+    CHECK_FALSE(s.contentFocused);
+    out = draw(s);
+    CHECK(out.find("Name ^") != std::string::npos);
+    CHECK(out.find("1 i Info") != std::string::npos);
+}
