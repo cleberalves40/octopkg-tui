@@ -1,6 +1,7 @@
 # octopkg-tui
 
 [![Build & Test](https://github.com/cleberalves40/octopkg-tui/actions/workflows/build.yml/badge.svg)](https://github.com/cleberalves40/octopkg-tui/actions/workflows/build.yml)
+[![FreeBSD 16-CURRENT](https://github.com/cleberalves40/octopkg-tui/actions/workflows/freebsd16.yml/badge.svg)](https://github.com/cleberalves40/octopkg-tui/actions/workflows/freebsd16.yml)
 [![License: GPL v2+](https://img.shields.io/badge/License-GPL%20v2%2B-blue.svg)](LICENSE)
 
 Interface de terminal (TUI) para o [`pkg(8)`](https://man.freebsd.org/cgi/man.cgi?pkg(8)),
@@ -38,7 +39,7 @@ instalar e **x** para remover.)
 
 ## Estado
 
-**v0.7.0.** Lista os pacotes instalados e os dos repositórios, com detalhes e
+**v0.7.1.** Lista os pacotes instalados e os dos repositórios, com detalhes e
 arquivos, busca por nome ou por descrição (**F7**), filtra por categoria (**F8**) e
 maximiza a lista ou as abas (**F11**); marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da
 transação e a executa (**Alt+M**), instala as atualizações (**Ctrl+U**), sincroniza o
@@ -189,7 +190,10 @@ sh tests/tui-smoke.sh build      # a interface num pseudo-terminal, com um pkg f
 
 O CI roda no Ubuntu (com ASan e UBSan) e no FreeBSD 14.5 e 15.1, em amd64 e aarch64,
 incluindo a interface num pseudo-terminal e a validação do port
-(`ci/freebsd-port.sh`: portlint, stage-qa, pacote e o binário instalado).
+(`ci/freebsd-port.sh`: portlint, stage-qa, pacote e o binário instalado). O
+FreeBSD 16.0-CURRENT, que nenhuma action oferece, roda os mesmos testes na imagem
+oficial de snapshot, no QEMU (`ci/freebsd16-vm.sh`): o amd64 em cada pull request e
+as duas arquiteturas toda semana e no disparo manual.
 
 ## Licença
 

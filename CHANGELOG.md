@@ -5,6 +5,27 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto usa [versionamento semântico](https://semver.org/lang/pt-BR/),
 com tags no formato `vX.Y.Z`.
 
+## [0.7.1] - 2026-10-20
+
+Homologação no FreeBSD 16.0-CURRENT.
+
+### Adicionado
+- Workflow **FreeBSD 16-CURRENT** (`.github/workflows/freebsd16.yml` e
+  `ci/freebsd16-vm.sh`), como a homologação do bectl-gui: nenhuma action de CI
+  oferece o 16.0-CURRENT, então o script dá boot na imagem oficial de snapshot no
+  QEMU (KVM no amd64, emulado no aarch64), confere o SHA256 dela e roda dentro da VM
+  os mesmos testes dos jobs 14.5 e 15.1: os de núcleo, modelo e tela, a integração
+  com o `pkg(8)` real (instalar e remover o figlet, as notícias), a interface num
+  pseudo-terminal e a validação do port.
+- Em pull requests e na `main`, só o amd64; o aarch64 roda no disparo manual, toda
+  segunda-feira (os snapshots do CURRENT mudam a cada semana) e num push no branch
+  `validate-freebsd16`.
+
+### Homologado
+- FreeBSD 16.0-CURRENT, snapshot de 2026-10-19 (`main-n290219-041802b362aa`), com
+  o clang 21.1.8: amd64 (FTXUI 7.0.3) e aarch64 (FTXUI 6.1.9), tudo passando, sem
+  avisos de compilação, e o port validado (portlint sem erros).
+
 ## [0.7.0] - 2026-10-20
 
 Maximizar a lista ou as abas.
@@ -194,6 +215,7 @@ Primeira versão: somente leitura.
 - Compatível com o FTXUI 6.1.9 e 7.x: a primeira listagem parte de dentro do
   laço de eventos, porque o FTXUI 6 descarta tarefas enviadas antes dele.
 
+[0.7.1]: https://github.com/cleberalves40/octopkg-tui/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.4.0...v0.5.0

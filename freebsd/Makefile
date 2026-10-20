@@ -1,6 +1,6 @@
 PORTNAME=	octopkg-tui
 DISTVERSIONPREFIX=	v
-DISTVERSION=	0.7.0
+DISTVERSION=	0.7.1
 CATEGORIES=	ports-mgmt
 
 MAINTAINER=	cleber@bsd.com.br
