@@ -30,6 +30,7 @@ struct Options {
     bool remote = false;         // começa na visão Repositório
     std::string elevator = "-";  // "-": preferência salva, ou doas (vazio se root)
     std::string bectlPath;       // vazio: /sbin/bectl
+    std::string theme;           // vazio: preferência salva ou "system"
 };
 
 /** Resultado de uma listagem, aplicado na thread da interface. */
@@ -84,6 +85,11 @@ private:
     void actClean();
     void actLock(bool lock);
     void actAbout();
+    void actPreferences();
+    void nextThemeKey();
+    void openFind();
+    void findStep(int delta);
+    bool handleFindEvent(const ftxui::Event &event);
     void openMenu(int menu);
     void confirmTransaction(const octo::TransactionPreview &removal, const octo::TransactionPreview &install,
                             const std::vector<std::string> &toRemove, const std::vector<std::string> &toInstall);
@@ -159,6 +165,10 @@ private:
     std::string m_partial;                     // linha da Saída ainda sem "\n"
     int m_beAvailable = -1;                    // bectl check: -1 ainda não testado
     std::string m_operationError;              // fica no status até a próxima ação
+    std::string m_themeId;
+    bool m_findOpen = false;                   // Ctrl+F
+    std::string m_findText;
+    int m_findIndex = 0;                       // resultado atual, entre os encontrados
 
     Dialog m_dialog;
     Op m_onAccept;                             // Confirm

@@ -2,7 +2,7 @@
 #
 # Teste de fumaça da interface num pseudo-terminal, com um pkg falso: ela
 # precisa listar os pacotes, carregar os detalhes do selecionado, abrir o menu
-# (F9), marcar um pacote (+) e sair com "q". Funciona com o script(1) do BSD e com o do util-linux. Não precisa de
+# (F9), marcar um pacote (+), abrir as Preferências (Alt+,) e sair com "q". Funciona com o script(1) do BSD e com o do util-linux. Não precisa de
 # root nem do pkg(8).
 #
 # uso: tests/tui-smoke.sh [diretório-de-build]
@@ -54,6 +54,10 @@ keys() {
 	sleep 1
 	printf '+'
 	wait_for "Actions (1)"
+	printf '\033,'
+	wait_for "System (terminal colors)"
+	printf '\033'
+	sleep 1
 	printf q
 }
 set +e
@@ -69,7 +73,7 @@ set -e
 plain "$work/screen.raw" >"$work/screen.txt"
 [ "$rc" -eq 0 ] || { tail -c 4000 "$work/screen.txt"; echo "FAIL: octopkg-tui terminou com status $rc" >&2; exit 1; }
 for text in "Installed packages" "tela-ok" "2 package(s)" "1 outdated" "Origin:" "ftp/curl" "Check updates" \
-	"Actions (1)"; do
+	"Actions (1)" "Preferences" "System (terminal colors)"; do
 	grep -aq "$text" "$work/screen.txt" || {
 		tail -c 4000 "$work/screen.txt"
 		echo "FAIL: a tela não mostrou: $text" >&2

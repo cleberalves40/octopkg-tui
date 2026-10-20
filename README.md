@@ -38,13 +38,13 @@ instalar e **x** para remover.)
 
 ## Estado
 
-**v0.2.0: transações.** Além da lista, da busca, dos detalhes e dos arquivos da v0.1.0,
-marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da transação
-e a executa (**Alt+M**), instala as atualizações (**Ctrl+U**), sincroniza o banco
-(**Ctrl+K**), limpa o cache e bloqueia ou desbloqueia pacotes, com os comandos do
-OctoPkg e, se o sistema usa Boot Environments, a opção de criar um antes. A busca
-dentro das abas, Preferências e temas chegam na v0.3.0. Veja o
-[CHANGELOG](CHANGELOG.md).
+**v0.3.0.** Lista os pacotes instalados e os dos repositórios, com detalhes e
+arquivos; marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da
+transação e a executa (**Alt+M**), instala as atualizações (**Ctrl+U**), sincroniza o
+banco (**Ctrl+K**), limpa o cache e bloqueia ou desbloqueia pacotes, com os comandos
+do OctoPkg e, se o sistema usa Boot Environments, a opção de criar um antes. Tem os
+15 temas do bectl-gui (**Alt+T**), Preferências (**Alt+,**) e a busca dentro das abas
+(**Ctrl+F**). Veja o [CHANGELOG](CHANGELOG.md).
 
 ## Requisitos (FreeBSD)
 
@@ -95,10 +95,16 @@ cmake --build build
 ```
 
 Opções: `--remote` (começa na visão Repositório), `--icons=nerd|unicode|ascii`,
-`--lang=en_US|pt_BR|es_ES`, `--elevator=doas|sudo|none`, `--config=ARQUIVO`,
-`--pkg=EXECUTÁVEL`, `--bectl=EXECUTÁVEL`, `--version`. As preferências ficam em
-`~/.config/octopkg-tui/config`: a ordem da tabela, e `elevator`, `icons` e
-`language`, se definidas à mão.
+`--lang=en_US|pt_BR|es_ES`, `--theme=TEMA`, `--elevator=doas|sudo|none`,
+`--config=ARQUIVO`, `--pkg=EXECUTÁVEL`, `--bectl=EXECUTÁVEL`, `--version`. As
+preferências ficam em `~/.config/octopkg-tui/config`: a ordem da tabela, o tema, o
+idioma e os ícones (pelo diálogo de Preferências, **Alt+,**), e `elevator`, definido
+à mão.
+
+Temas, os mesmos do bectl-gui: `system` (as cores do terminal), `octopkg`, `frappe`,
+`latte`, `mocha`, `macchiato`, `solarized_dark`, `solarized_light`, `selenized_dark`,
+`selenized_light`, `dracula`, `tokyo_night`, `nord`, `gruvbox` e `one_dark`. Eles usam
+cores de 24 bits; num terminal com menos, o FTXUI as aproxima.
 
 ## Teclado e mouse
 
@@ -114,6 +120,8 @@ Opções: `--remote` (começa na visão Repositório), `--icons=nerd|unicode|asc
 | <kbd>Ctrl+E</kbd> | Desfazer as marcas |
 | <kbd>Ctrl+U</kbd> / <kbd>Ctrl+K</kbd> | Instalar as atualizações / sincronizar o banco |
 | <kbd>F9</kbd> / <kbd>Alt+A</kbd> <kbd>Alt+C</kbd> <kbd>Alt+J</kbd> | Menus Arquivo, Ações e Ajuda |
+| <kbd>Ctrl+F</kbd> | Buscar texto nas abas Arquivos, Saída e Ajuda (<kbd>F3</kbd> / <kbd>Shift+F3</kbd>: próximo / anterior; <kbd>Esc</kbd> fecha) |
+| <kbd>Alt+,</kbd> / <kbd>Alt+T</kbd> | Preferências (tema, idioma, ícones) / próximo tema |
 | <kbd>F6</kbd> | Escolher a coluna de ordenação: de novo na mesma coluna inverte, e "(ordem do pkg)" volta à ordem original |
 | Clique no cabeçalho | Ordenar: crescente, decrescente, ordem do pkg |
 | <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> <kbd>6</kbd> / <kbd>Alt+1</kbd>…<kbd>Alt+6</kbd> | Abas Informação, Arquivos, Ações, Saída, Ajuda, com os números do OctoPkg (<kbd>F1</kbd>: Ajuda) |
@@ -130,7 +138,7 @@ O mapa completo, com a correspondência para os atalhos do OctoPkg, está em
 |:---|:---|:---|
 | Núcleo | `src/core/` | `pkg(8)` sem shell e em inglês (`LC_ALL=C`), leitura de `pkg query`, `pkg rquery` e das prévias (`-n`), estados dos pacotes, as operações com doas/sudo e a saída ao vivo, Boot Environments, tamanhos, i18n e preferências. C++17 puro: um porte de `Package`, `UnixCommand` e das transações do OctoPkg. |
 | Modelo | `src/model/` | Filtro, ordenação (versão, tamanho, data, estado), seleção que acompanha o pacote e a janela visível da tabela |
-| Interface | `src/tui/` | FTXUI: tela, teclado, mouse, marcas, diálogos e menus; listagem, detalhes, prévias e operações em segundo plano |
+| Interface | `src/tui/` | FTXUI: tela, temas, teclado, mouse, marcas, diálogos, menus e busca nas abas; listagem, detalhes, prévias e operações em segundo plano |
 
 As consultas usam formatos próprios do `pkg query`/`pkg rquery` (campos separados por
 TAB), em vez de ler a saída para pessoas de `pkg info` e `pkg search` como o OctoPkg:
@@ -149,11 +157,12 @@ sh tests/tui-smoke.sh build      # a interface num pseudo-terminal, com um pkg f
   conferem os argumentos de cada operação, a execução de processos e as preferências.
 - `test_model`: filtro, ordenação, seleção e rolagem, com 40 mil pacotes.
 - `test_view`: desenha a tela em texto e dirige a interface com eventos de teclado:
-  marcas, prévias, diálogos, menus e operações.
+  marcas, prévias, diálogos, menus, operações, temas, Preferências e a busca nas abas.
 - `test_integration`: contra o `pkg(8)` real; instala, bloqueia, desbloqueia e remove
   o `figlet`.
 - `tests/tui-smoke.sh`: a interface num pseudo-terminal com um pkg falso (lista,
-  detalhes, menu, marca e saída); roda também no Ubuntu, contra o FTXUI 6.1.9.
+  detalhes, menu, marca, Preferências e saída); roda também no Ubuntu, contra o FTXUI
+  6.1.9.
 - `tests/freebsd-e2e.sh`: além dos testes acima, instala e remove o `figlet` pela
   interface, num pseudo-terminal.
 
