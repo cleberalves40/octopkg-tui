@@ -5,6 +5,26 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto usa [versionamento semântico](https://semver.org/lang/pt-BR/),
 com tags no formato `vX.Y.Z`.
 
+## [0.3.0] - 2026-10-20
+
+Temas, Preferências e busca nas abas.
+
+### Adicionado
+- Os 15 temas do bectl-gui 1.2.0, com as mesmas paletas: Sistema (as cores do
+  terminal, como antes), OctoPKG (claro), Catppuccin Frappé, Latte, Mocha e
+  Macchiato, Solarized e Selenized (escuro e claro), Dracula, Tokyo Night, Nord,
+  Gruvbox Dark e One Dark. Fundo, texto, seleção, bordas, diálogos e as cores dos
+  estados seguem o tema; num terminal sem cores de 24 bits, o FTXUI as reduz para
+  256 ou 16. **Alt+T** passa ao próximo tema, e o tema aparece na barra de status.
+- **Preferências** (**Alt+,** ou Arquivo → Preferências…): tema, idioma (padrão do
+  sistema, English, Português, Español) e ícones (Nerd Fonts, Unicode, ASCII),
+  aplicados na hora e salvos em `~/.config/octopkg-tui/config`. Opção `--theme`.
+- **Ctrl+F**, como no OctoPkg: busca texto nas abas Arquivos, Saída e Ajuda, sem
+  diferenciar maiúsculas; os resultados ficam destacados, e Enter/F3 e Shift+F3
+  (ou as setas) vão ao próximo e ao anterior, rolando a aba; Esc fecha.
+- Testes: os temas e as cores que eles produzem, as Preferências salvas e relidas,
+  e a busca nas três abas; o teste de fumaça abre as Preferências.
+
 ## [0.2.0] - 2026-10-20
 
 Transações: marcar, instalar, remover, atualizar e limpar, como no OctoPkg.
@@ -91,5 +111,6 @@ Primeira versão: somente leitura.
 - Compatível com o FTXUI 6.1.9 e 7.x: a primeira listagem parte de dentro do
   laço de eventos, porque o FTXUI 6 descarta tarefas enviadas antes dele.
 
+[0.3.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cleberalves40/octopkg-tui/releases/tag/v0.1.0

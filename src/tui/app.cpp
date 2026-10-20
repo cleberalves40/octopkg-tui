@@ -1,6 +1,7 @@
 #include "app.h"
 #include "i18n.h"
 #include "process.h"
+#include "theme.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -30,6 +31,10 @@ const std::string kAltC = "\x1b" "c";
 const std::string kAltI = "\x1b" "i";
 const std::string kAltJ = "\x1b" "j";
 const std::string kAltM = "\x1b" "m";
+const std::string kAltT = "\x1b" "t";
+const std::string kAltComma = "\x1b" ",";
+const std::string kCtrlF = "\x06";
+const std::string kShiftF3 = "\x1b[1;2R";   // xterm; o FTXUI não tem um evento próprio
 
 enum Menus { FileMenu = 0, ActionsMenu, HelpMenu };
 
@@ -95,6 +100,7 @@ App::App(const Options &options)
     if (m_sort.column < -1 || m_sort.column >= model::ColumnCount)
         m_sort.column = model::Name;
     m_sort.ascending = m_settings.value("sort.order", "asc") != "desc";
+    m_themeId = theme(options.theme.empty() ? m_settings.value("theme", "system") : options.theme).id;
     m_status = i18n::tr("Ready.");
 }
 
@@ -339,6 +345,18 @@ ViewState App::viewState()
     s.toInstall = m_toInstall;
     s.toRemove = m_toRemove;
     s.dialog = m_dialog;
+    s.themeId = m_themeId;
+    s.findOpen = m_findOpen;
+    s.findText = m_findText;
+    if (m_findOpen && !m_findText.empty()) {
+        const std::vector<int> found = findLines(tabText(s), m_findText);
+        s.findCount = static_cast<int>(found.size());
+        if (!found.empty()) {
+            m_findIndex = ((m_findIndex % s.findCount) + s.findCount) % s.findCount;
+            s.findMatchIndex = m_findIndex;
+            s.findMatch = found[static_cast<size_t>(m_findIndex)];
+        }
+    }
     return s;
 }
 
@@ -671,6 +689,124 @@ void App::actAbout()
 }
 
 // ---------------------------------------------------------------------------
+// Preferências, temas e busca nas abas
+// ---------------------------------------------------------------------------
+
+void App::nextThemeKey()
+{
+    m_themeId = nextTheme(m_themeId).id;
+    m_settings.setValue("theme", m_themeId);
+    m_settings.save();
+    const Theme t = theme(m_themeId);
+    m_status = i18n::trf("Theme: %1", {t.system ? i18n::tr("System") : std::string(t.label)});
+}
+
+void App::actPreferences()
+{
+    // As mesmas preferências do bectl-gui (tema e idioma), mais os ícones.
+    DialogField themeField;
+    themeField.kind = DialogField::Choice;
+    themeField.label = i18n::tr("Theme:");
+    const auto &list = themes();
+    for (size_t i = 0; i < list.size(); ++i) {
+        themeField.choices.push_back(list[i].system ? i18n::tr("System (terminal colors)") : list[i].label);
+        if (m_themeId == list[i].id)
+            themeField.choice = static_cast<int>(i);
+    }
+    DialogField lang;
+    lang.kind = DialogField::Choice;
+    lang.label = i18n::tr("Language:");
+    const std::vector<std::string> langIds{"system", "en_US", "pt_BR", "es_ES"};
+    lang.choices = {i18n::tr("System default"), "English", "Português (Brasil)", "Español"};
+    const std::string savedLang = m_settings.value("language", "system");
+    for (size_t i = 0; i < langIds.size(); ++i)
+        if (savedLang == langIds[i])
+            lang.choice = static_cast<int>(i);
+    DialogField iconsField;
+    iconsField.kind = DialogField::Choice;
+    iconsField.label = i18n::tr("Icons:");
+    const std::vector<IconMode> modes{IconMode::Nerd, IconMode::Unicode, IconMode::Ascii};
+    iconsField.choices = {"Nerd Fonts", "Unicode", "ASCII"};
+    for (size_t i = 0; i < modes.size(); ++i)
+        if (m_iconMode == modes[i])
+            iconsField.choice = static_cast<int>(i);
+    iconsField.hint = i18n::tr("Nerd Fonts need a Nerd Font in the terminal.");
+
+    showForm(i18n::tr("Preferences"), std::string(), {themeField, lang, iconsField}, false,
+             [this, langIds, modes](const std::vector<DialogField> &f) {
+                 m_themeId = themes()[static_cast<size_t>(f[0].choice)].id;
+                 const std::string language = langIds[static_cast<size_t>(f[1].choice)];
+                 m_iconMode = modes[static_cast<size_t>(f[2].choice)];
+                 if (language == "system")
+                     i18n::initFromEnvironment();
+                 else
+                     i18n::setLocale(language);
+                 m_settings.setValue("theme", m_themeId);
+                 m_settings.setValue("language", language);
+                 m_settings.setValue("icons", iconModeName(m_iconMode));
+                 m_status = m_settings.save() ? i18n::tr("Preferences saved.")
+                                              : i18n::trf("Could not save %1", {m_settings.path()});
+             });
+    // O foco começa no primeiro campo, não no OK.
+    m_dialog.focus = 0;
+}
+
+void App::openFind()
+{
+    // Como o Ctrl+F do OctoPkg: nas abas Arquivos, Saída e Ajuda.
+    if (m_tab != FilesTab && m_tab != OutputTab && m_tab != HelpTab) {
+        m_status = i18n::tr("Find works in the Files, Output and Help tabs.");
+        return;
+    }
+    m_findOpen = true;
+    m_findText.clear();
+    m_findIndex = 0;
+    m_contentFocused = false;
+}
+
+void App::findStep(int delta)
+{
+    m_findIndex += delta;
+    // Rola até o resultado, no meio da aba se der.
+    const ViewState s = viewState();
+    if (s.findMatch >= 0)
+        m_contentScroll = std::max(0, s.findMatch - std::max(1, m_contentHeight - 1) / 2);
+}
+
+bool App::handleFindEvent(const Event &event)
+{
+    const std::string &raw = event.input();
+    if (event == Event::Escape || raw == kCtrlF) {
+        m_findOpen = false;
+        m_findText.clear();
+        return true;
+    }
+    if (event == Event::Return || event == Event::F3 || event == Event::ArrowDown) {
+        findStep(1);
+        return true;
+    }
+    if (raw == kShiftF3 || event == Event::ArrowUp) {
+        findStep(-1);
+        return true;
+    }
+    if (event == Event::Backspace) {
+        popUtf8(m_findText);
+        m_findIndex = 0;
+        findStep(0);
+        return true;
+    }
+    if (event.is_character()) {
+        m_findText += event.character();
+        m_findIndex = 0;
+        findStep(0);
+        return true;
+    }
+    if (event.is_mouse())
+        return handleMouse(event);
+    return true;   // as demais teclas não saem da busca por engano
+}
+
+// ---------------------------------------------------------------------------
 // Execução: prévias e operações elevadas
 // ---------------------------------------------------------------------------
 
@@ -892,6 +1028,9 @@ void App::openMenu(int menu)
          {i18n::tr("Install updates"), "Ctrl+U"},
          {i18n::tr("Clean the local cache"), ""},
          sep,
+         {i18n::tr("Preferences…"), "Alt+,"},
+         {i18n::tr("Next theme"), "Alt+T"},
+         sep,
          {i18n::tr("Exit"), "Ctrl+Q"}},
         {{i18n::tr("Mark for installation"), "+"},
          {i18n::tr("Mark for removal"), "-"},
@@ -905,7 +1044,8 @@ void App::openMenu(int menu)
     };
     m_menuActions = {
         {[this] { refresh(); }, [this] { toggleView(); }, nullptr, [this] { actUpdate(); },
-         [this] { actUpgrade(); }, [this] { actClean(); }, nullptr, [this] { quit(); }},
+         [this] { actUpgrade(); }, [this] { actClean(); }, nullptr, [this] { actPreferences(); },
+         [this] { nextThemeKey(); }, nullptr, [this] { quit(); }},
         {[this] { markInstall(); }, [this] { markRemove(); }, nullptr, [this] { actApply(); },
          [this] { clearMarks(); }, nullptr, [this] { actLock(true); }, [this] { actLock(false); }},
         {[this] { setTab(HelpTab); }, [this] { actAbout(); }},
@@ -1071,6 +1211,9 @@ bool App::handleEvent(const Event &event)
         return handleDialogEvent(event);
     }
 
+    if (m_findOpen)
+        return handleFindEvent(event);
+
     // Escolha da coluna de ordenação (F6).
     if (m_sortChooser) {
         if (event == Event::ArrowUp || event == Event::Character('k'))
@@ -1153,6 +1296,18 @@ bool App::handleEvent(const Event &event)
     }
     if (raw == kCtrlE) {
         clearMarks();
+        return true;
+    }
+    if (raw == kCtrlF) {
+        openFind();
+        return true;
+    }
+    if (raw == kAltT) {
+        nextThemeKey();
+        return true;
+    }
+    if (raw == kAltComma) {
+        actPreferences();
         return true;
     }
     // Ctrl+M é Enter no terminal: aplicar fica em Alt+M.

@@ -10,6 +10,7 @@
 #include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/screen.hpp>
+#include <ftxui/screen/terminal.hpp>
 #include <fstream>
 #include <memory>
 #include <set>
@@ -697,4 +698,170 @@ TEST_CASE("diálogo em português", "[view][menu]")
                           "[ Cancelar ]", "F9Menu", "+/-Marcar"})
         CHECK_INFO(out, t);
     i18n::setLocale("en_US");
+}
+
+// --- v0.3.0: temas, preferências e busca nas abas ---
+
+namespace {
+
+// A tela com as sequências de cor, para conferir as cores do tema.
+std::string drawRaw(const tui::ViewState &s, int width = 120, int height = 40)
+{
+    Terminal::SetColorSupport(Terminal::Color::TrueColor);
+    auto screen = Screen::Create(Dimension::Fixed(width), Dimension::Fixed(height));
+    Render(screen, tui::render(s, text("")));
+    return screen.ToString();
+}
+
+} // namespace
+
+TEST_CASE("os temas do bectl-gui, em ciclo", "[theme]")
+{
+    const auto &list = tui::themes();
+    REQUIRE(list.size() == 15);
+    CHECK(std::string(list.front().id) == "system");
+    CHECK(list.front().system);
+    std::set<std::string> ids;
+    for (const auto &t : list)
+        ids.insert(t.id);
+    CHECK(ids.size() == list.size());
+    for (const char *id : {"octopkg", "frappe", "latte", "mocha", "macchiato", "solarized_dark", "solarized_light",
+                           "selenized_dark", "selenized_light", "dracula", "tokyo_night", "nord", "gruvbox",
+                           "one_dark"})
+        CHECK(ids.count(id));
+    CHECK(std::string(tui::theme("nao-existe").id) == "system");
+    CHECK(std::string(tui::nextTheme("system").id) == "octopkg");
+    CHECK(std::string(tui::nextTheme("one_dark").id) == "system");
+}
+
+TEST_CASE("tema pinta o fundo, o texto e a seleção", "[theme][view]")
+{
+    i18n::setLocale("en_US");
+    tui::ViewState s;
+    s.rows = sample();
+    s.selected = 0;
+    s.iconMode = tui::IconMode::Ascii;
+    s.themeId = "nord";
+    const std::string raw = drawRaw(s);
+    CHECK(raw.find("48;2;46;52;64") != std::string::npos);    // fundo #2e3440
+    CHECK(raw.find("38;2;216;222;233") != std::string::npos); // texto #d8dee9
+    CHECK(raw.find("48;2;129;161;193") != std::string::npos); // seleção #81a1c1
+    CHECK(draw(s).find("Theme: Nord") != std::string::npos);
+
+    s.themeId = "system";
+    const std::string plain = drawRaw(s);
+    CHECK(plain.find("48;2;") == std::string::npos);          // sem cores próprias
+    CHECK(draw(s).find("Theme: System") != std::string::npos);
+}
+
+TEST_CASE("Alt+T troca o tema e o salva", "[theme][app]")
+{
+    AppFixture f;
+    CHECK(f.app.viewState().themeId == "system");
+    f.app.handleEvent(Event::Special("\x1b" "t"));
+    CHECK(f.app.viewState().themeId == "octopkg");
+    CHECK(f.app.settings().value("theme") == "octopkg");
+    CHECK(f.app.viewState().status == "Theme: OctoPKG (claro)");
+    for (int i = 0; i < 14; ++i)
+        f.app.handleEvent(Event::Special("\x1b" "t"));
+    CHECK(f.app.viewState().themeId == "system");
+}
+
+TEST_CASE("Preferências: tema, idioma e ícones, aplicados e salvos", "[app][preferences]")
+{
+    AppFixture f;
+    f.app.handleEvent(Event::Special("\x1b" ","));   // Alt+,
+    REQUIRE(f.app.viewState().dialog.kind == tui::Dialog::Form);
+    const tui::Dialog d = f.app.viewState().dialog;
+    CHECK(d.title == "Preferences");
+    REQUIRE(d.fields.size() == 3);
+    CHECK(d.fields[0].choices.size() == 15);
+    CHECK(d.focus == 0);
+    std::string out = draw(f.app.viewState());
+    for (const char *t : {"Theme:", "System (terminal colors)", "Language:", "Icons:", "ASCII"})
+        CHECK_INFO(out, t);
+
+    for (int i = 0; i < 12; ++i)   // Tema: system → … → nord
+        f.app.handleEvent(Event::ArrowRight);
+    f.app.handleEvent(Event::Tab);                   // Idioma
+    f.app.handleEvent(Event::ArrowRight);            // en_US
+    f.app.handleEvent(Event::ArrowRight);            // pt_BR
+    f.app.handleEvent(Event::Tab);                   // Ícones
+    f.app.handleEvent(Event::ArrowLeft);             // ASCII → Unicode
+    f.app.handleEvent(Event::Return);
+
+    const tui::ViewState s = f.app.viewState();
+    CHECK(s.dialog.kind == tui::Dialog::None);
+    CHECK(s.themeId == "nord");
+    CHECK(s.iconMode == tui::IconMode::Unicode);
+    CHECK(i18n::locale() == "pt_BR");
+    CHECK(s.status == "Preferências salvas.");
+    CHECK(f.app.settings().value("theme") == "nord");
+    CHECK(f.app.settings().value("language") == "pt_BR");
+    CHECK(f.app.settings().value("icons") == "unicode");
+    // Relido do arquivo, numa nova App.
+    tui::Options o;
+    o.pkgPath = f.dir.file("pkg-nao-usado");
+    o.settingsPath = f.dir.file("config");
+    tui::App again(o);
+    CHECK(again.viewState().themeId == "nord");
+    CHECK(again.viewState().iconMode == tui::IconMode::Unicode);
+    i18n::setLocale("en_US");
+}
+
+TEST_CASE("Ctrl+F busca nas abas Arquivos, Saída e Ajuda", "[app][find]")
+{
+    AppFixture f;
+    f.app.handleEvent(Event::ArrowDown);   // curl
+    octo::Details d = curlDetails();
+    d.files = {"/usr/local/bin/curl", "/usr/local/include/curl/curl.h", "/usr/local/lib/libcurl.so.4",
+               "/usr/local/share/man/man1/curl.1.gz"};
+    f.app.applyDetails(f.app.currentDetailsKey(), d, "");
+
+    // Na aba Informação, não há onde buscar.
+    f.app.handleEvent(Event::Special("\x06"));
+    CHECK_FALSE(f.app.viewState().findOpen);
+    CHECK(f.app.viewState().status == "Find works in the Files, Output and Help tabs.");
+
+    f.app.handleEvent(Event::Character('2'));
+    f.app.handleEvent(Event::Special("\x06"));
+    REQUIRE(f.app.viewState().findOpen);
+    for (char c : std::string("LIB"))   // sem diferenciar maiúsculas
+        f.app.handleEvent(Event::Character(c));
+    tui::ViewState s = f.app.viewState();
+    CHECK(s.findCount == 1);
+    CHECK(s.findMatch == 2);
+    CHECK(draw(s).find("Find: LIB") != std::string::npos);
+    CHECK(draw(s).find("1/1") != std::string::npos);
+
+    f.app.handleEvent(Event::Backspace);
+    f.app.handleEvent(Event::Backspace);
+    f.app.handleEvent(Event::Backspace);
+    for (char c : std::string("curl"))
+        f.app.handleEvent(Event::Character(c));
+    s = f.app.viewState();
+    CHECK(s.findCount == 4);
+    CHECK(s.findMatch == 0);
+    f.app.handleEvent(Event::F3);
+    CHECK(f.app.viewState().findMatch == 1);
+    f.app.handleEvent(Event::Special("\x1b[1;2R"));   // Shift+F3
+    f.app.handleEvent(Event::Special("\x1b[1;2R"));
+    CHECK(f.app.viewState().findMatch == 3);          // volta ao último, em ciclo
+    for (char c : std::string("zzz"))
+        f.app.handleEvent(Event::Character(c));
+    CHECK(f.app.viewState().findCount == 0);
+    CHECK(draw(f.app.viewState()).find("Not found") != std::string::npos);
+    // q é texto da busca, não sair.
+    CHECK(f.app.handleEvent(Event::Character('q')));
+    CHECK(f.app.viewState().findText == "curlzzzq");
+    f.app.handleEvent(Event::Escape);
+    CHECK_FALSE(f.app.viewState().findOpen);
+    CHECK(f.app.viewState().findText.empty());
+
+    // Na Ajuda, encontra o próprio atalho.
+    f.app.handleEvent(Event::F1);
+    f.app.handleEvent(Event::Special("\x06"));
+    for (char c : std::string("Ctrl+F"))
+        f.app.handleEvent(Event::Character(c));
+    CHECK(f.app.viewState().findCount >= 1);
 }

@@ -4,6 +4,7 @@
 #include "icons.h"
 #include "listmodel.h"
 #include "pkg.h"
+#include "theme.h"
 
 #include <array>
 #include <ftxui/dom/elements.hpp>
@@ -84,6 +85,13 @@ struct ViewState {
     std::set<std::string> toInstall;   // marcados com +, como no OctoPkg
     std::set<std::string> toRemove;    // marcados com -
     Dialog dialog;
+    std::string themeId = "system";
+    // Busca na aba (Ctrl+F): o texto e a linha do resultado atual.
+    bool findOpen = false;
+    std::string findText;
+    int findMatch = -1;                // linha do resultado atual; -1 sem resultado
+    int findMatchIndex = 0;            // posição dele entre os resultados
+    int findCount = 0;
 };
 
 /** Posições na tela, para o mouse, e o tamanho do conteúdo da aba. */
@@ -98,6 +106,14 @@ struct HitBoxes {
 std::string columnTitle(int column);
 /** Estado do pacote por extenso ("Outdated (version 2.0 is available)"). */
 std::string statusText(const octo::Package &p);
+
+/**
+ * Texto das linhas das abas em que Ctrl+F busca (Arquivos, Saída e Ajuda),
+ * uma por linha desenhada; vazio nas outras.
+ */
+std::vector<std::string> tabText(const ViewState &state);
+/** Índices das linhas de lines que contêm needle, sem diferenciar maiúsculas. */
+std::vector<int> findLines(const std::vector<std::string> &lines, const std::string &needle);
 
 /** Tela completa. filter é o campo de filtro (componente Input ou texto). */
 ftxui::Element render(const ViewState &state, ftxui::Element filter, HitBoxes *boxes = nullptr);

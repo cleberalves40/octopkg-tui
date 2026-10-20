@@ -1,11 +1,48 @@
 #include "view.h"
 #include "i18n.h"
 
+#include <cctype>
+
 using namespace ftxui;
 
 namespace tui {
 
 namespace {
+
+// Tema da tela sendo desenhada, montado no começo de render() (sempre na
+// thread da interface): evita passá-lo a cada função de desenho.
+Theme g_theme = theme("system");
+
+const Theme &T()
+{
+    return g_theme;
+}
+
+// Seleção e destaque: no tema do sistema, vídeo reverso, como antes.
+Decorator highlight()
+{
+    if (T().system)
+        return inverted;
+    return bgcolor(T().accent) | color(T().accentText);
+}
+
+// Texto secundário.
+Decorator faint()
+{
+    if (T().system)
+        return dim;
+    return color(T().dim);
+}
+
+Element sep()
+{
+    return T().system ? separator() : separator() | color(T().border);
+}
+
+Element sepLight()
+{
+    return T().system ? separatorLight() : separatorLight() | color(T().border);
+}
 
 // Larguras fixas das colunas; o nome ocupa o restante.
 constexpr int kIconWidth = 3;
@@ -46,11 +83,11 @@ const char *stateIcon(IconMode mode, const octo::Package &p)
 Color stateColor(const octo::Package &p)
 {
     switch (p.status) {
-    case octo::Status::Locked:       return Color::Magenta;
-    case octo::Status::Outdated:     return Color::Yellow;
-    case octo::Status::Newer:        return Color::Cyan;
-    case octo::Status::NotInstalled: return Color::Default;
-    default:                         return Color::Green;
+    case octo::Status::Locked:       return T().magenta;
+    case octo::Status::Outdated:     return T().yellow;
+    case octo::Status::Newer:        return T().cyan;
+    case octo::Status::NotInstalled: return T().foreground;
+    default:                         return T().green;
     }
 }
 
@@ -77,9 +114,9 @@ Element row(const ViewState &s, size_t i, HitBoxes *boxes)
     const IconSet &ic = icons(s.iconMode);
     Element icon;
     if (s.toInstall.count(p.name))
-        icon = text(std::string(" ") + ic.toInstall) | color(Color::Green) | bold;
+        icon = text(std::string(" ") + ic.toInstall) | color(T().green) | bold;
     else if (s.toRemove.count(p.name))
-        icon = text(std::string(" ") + ic.toRemove) | color(Color::Red) | bold;
+        icon = text(std::string(" ") + ic.toRemove) | color(T().red) | bold;
     else {
         icon = text(std::string(" ") + stateIcon(s.iconMode, p));
         if (p.installed)
@@ -95,9 +132,9 @@ Element row(const ViewState &s, size_t i, HitBoxes *boxes)
         cell(text(octo::formatTime(p.installedOn)), kDateWidth),
     });
     if (!p.installed && !s.toInstall.count(p.name))
-        line = line | dim;
+        line = line | faint();
     if (static_cast<int>(i) == s.selected)
-        line = line | (s.contentFocused ? underlined : inverted);
+        line = line | (s.contentFocused ? Decorator(underlined) : highlight());
     if (boxes)
         line = line | reflect(boxes->rows[i]);
     return line;
@@ -111,8 +148,8 @@ Element table(const ViewState &s, HitBoxes *boxes)
     for (size_t i = 0; i < s.rows.size(); ++i)
         lines.push_back(row(s, i, boxes));
     if (lines.empty())
-        lines.push_back(text(s.busy ? std::string() : i18n::tr("No packages.")) | dim);
-    return vbox({header(s, boxes), separatorLight(), vbox(std::move(lines)) | flex | yframe});
+        lines.push_back(text(s.busy ? std::string() : i18n::tr("No packages.")) | faint());
+    return vbox({header(s, boxes), sepLight(), vbox(std::move(lines)) | flex | yframe});
 }
 
 Element tabs(const ViewState &s, HitBoxes *boxes)
@@ -135,7 +172,7 @@ Element tabs(const ViewState &s, HitBoxes *boxes)
     Elements items;
     for (int t = 0; t < TabCount; ++t) {
         Element e = text(std::string(" ") + tabKey(t) + " " + labels[t] + " ");
-        e = t == s.tab ? e | inverted | bold : e | dim;
+        e = t == s.tab ? e | highlight() | bold : e | faint();
         if (boxes)
             e = e | reflect(boxes->tabs[t]);
         items.push_back(e);
@@ -165,7 +202,7 @@ Elements infoLines(const ViewState &s)
 {
     Elements out;
     if (!s.hasCurrent) {
-        out.push_back(text(i18n::tr("Select a package to see details.")) | dim);
+        out.push_back(text(i18n::tr("Select a package to see details.")) | faint());
         return out;
     }
     const octo::Package &p = s.current;
@@ -173,11 +210,11 @@ Elements infoLines(const ViewState &s)
     out.push_back(hbox({text(i18n::tr("Status") + ":") | bold | size(WIDTH, EQUAL, kLabelWidth),
                         text(statusText(p)) | color(stateColor(p))}));
     if (!s.detailsError.empty()) {
-        out.push_back(text(i18n::trf("ERROR: %1", {s.detailsError})) | color(Color::Red));
+        out.push_back(text(i18n::trf("ERROR: %1", {s.detailsError})) | color(T().red));
         return out;
     }
     if (!s.detailsReady) {
-        out.push_back(text(i18n::tr("Loading…")) | dim);
+        out.push_back(text(i18n::tr("Loading…")) | faint());
         return out;
     }
     const octo::Details &d = s.details;
@@ -214,56 +251,69 @@ Elements filesLines(const ViewState &s)
 {
     Elements out;
     if (!s.hasCurrent)
-        out.push_back(text(i18n::tr("Select a package to see details.")) | dim);
+        out.push_back(text(i18n::tr("Select a package to see details.")) | faint());
     else if (!s.current.installed)
-        out.push_back(text(i18n::tr("Files are listed for installed packages only.")) | dim);
+        out.push_back(text(i18n::tr("Files are listed for installed packages only.")) | faint());
     else if (!s.detailsError.empty())
-        out.push_back(text(i18n::trf("ERROR: %1", {s.detailsError})) | color(Color::Red));
+        out.push_back(text(i18n::trf("ERROR: %1", {s.detailsError})) | color(T().red));
     else if (!s.detailsReady)
-        out.push_back(text(i18n::tr("Loading…")) | dim);
+        out.push_back(text(i18n::tr("Loading…")) | faint());
     else if (s.details.filesTruncated)
-        out.push_back(text(i18n::tr("This package has too many files to be listed.")) | dim);
+        out.push_back(text(i18n::tr("This package has too many files to be listed.")) | faint());
     else if (s.details.files.empty())
-        out.push_back(text(i18n::tr("No files.")) | dim);
+        out.push_back(text(i18n::tr("No files.")) | faint());
     else
         for (const auto &f : s.details.files)
             out.push_back(text(f));
     return out;
 }
 
+// Atalhos da aba Ajuda: (tecla, descrição); a busca (Ctrl+F) usa o mesmo texto.
+std::vector<std::pair<std::string, std::string>> helpEntries()
+{
+    return {
+        {"F5 / Ctrl+R", i18n::tr("Refresh the package list")},
+        {"↑ ↓ PgUp PgDn Home End", i18n::tr("Move")},
+        {"Ctrl+L  /", i18n::tr("Find a package in the package list")},
+        {"Esc  Enter  Ctrl+P", i18n::tr("Go back to the package list")},
+        {"i  Alt+I", i18n::tr("Switch between installed and repository packages")},
+        {"+  Insert", i18n::tr("Mark the selected package for installation")},
+        {"-  Delete", i18n::tr("Mark the selected package for removal")},
+        {"Alt+M", i18n::tr("Apply: install and remove the marked packages")},
+        {"Ctrl+E", i18n::tr("Cancel: clear the marks")},
+        {"Ctrl+K", i18n::tr("Check updates (pkg update)")},
+        {"Ctrl+U", i18n::tr("Install updates (pkg upgrade)")},
+        {"Ctrl+F", i18n::tr("Find text in the Files, Output and Help tabs (F3: next, Shift+F3: previous)")},
+        {"Alt+,", i18n::tr("Preferences: theme, language and icons")},
+        {"Alt+T", i18n::tr("Next theme")},
+        {"F9  Alt+A Alt+C Alt+J", i18n::tr("Menus File, Actions and Help")},
+        {"F6", i18n::tr("Choose the sort column (again: reverse; (pkg order): original order)")},
+        {"1 2 3 4 6  Alt+1…Alt+6", i18n::tr("Tabs Info, Files, Actions, Output and Help")},
+        {"F1", i18n::tr("Show this help page")},
+        {"Enter", i18n::tr("Show the Info tab of the selected package")},
+        {"Tab", i18n::tr("Scroll the tab with the arrow keys")},
+        {"Ctrl+Q  F10  q", i18n::tr("Exit")},
+        {"", i18n::tr("Click a column header to sort")},
+    };
+}
+
 Elements helpLines()
 {
-    const auto key = [](const std::string &k, const std::string &what) {
-        return hbox({text(k) | bold | size(WIDTH, EQUAL, 24), text(what)});
-    };
-    return {
-        key("F5 / Ctrl+R", i18n::tr("Refresh the package list")),
-        key("↑ ↓ PgUp PgDn Home End", i18n::tr("Move")),
-        key("Ctrl+L  /", i18n::tr("Find a package in the package list")),
-        key("Esc  Enter  Ctrl+P", i18n::tr("Go back to the package list")),
-        key("i  Alt+I", i18n::tr("Switch between installed and repository packages")),
-        key("+  Insert", i18n::tr("Mark the selected package for installation")),
-        key("-  Delete", i18n::tr("Mark the selected package for removal")),
-        key("Alt+M", i18n::tr("Apply: install and remove the marked packages")),
-        key("Ctrl+E", i18n::tr("Cancel: clear the marks")),
-        key("Ctrl+K", i18n::tr("Check updates (pkg update)")),
-        key("Ctrl+U", i18n::tr("Install updates (pkg upgrade)")),
-        key("F9  Alt+A Alt+C Alt+J", i18n::tr("Menus File, Actions and Help")),
-        key("F6", i18n::tr("Choose the sort column (again: reverse; (pkg order): original order)")),
-        key("1 2 3 4 6  Alt+1…Alt+6", i18n::tr("Tabs Info, Files, Actions, Output and Help")),
-        key("F1", i18n::tr("Show this help page")),
-        key("Enter", i18n::tr("Show the Info tab of the selected package")),
-        key("Tab", i18n::tr("Scroll the tab with the arrow keys")),
-        key("Ctrl+Q  F10  q", i18n::tr("Exit")),
-        text(i18n::tr("Click a column header to sort")) | dim,
-    };
+    Elements out;
+    for (const auto &e : helpEntries()) {
+        if (e.first.empty())
+            out.push_back(text(e.second) | faint());
+        else
+            out.push_back(hbox({text(e.first) | bold | size(WIDTH, EQUAL, 24), text(e.second)}));
+    }
+    return out;
 }
 
 Elements actionsLines(const ViewState &s)
 {
     Elements out;
     if (s.toInstall.empty() && s.toRemove.empty()) {
-        out.push_back(text(i18n::tr("No packages marked. Use + to install and - to remove.")) | dim);
+        out.push_back(text(i18n::tr("No packages marked. Use + to install and - to remove.")) | faint());
         return out;
     }
     const IconSet &ic = icons(s.iconMode);
@@ -275,9 +325,9 @@ Elements actionsLines(const ViewState &s)
         for (const auto &n : names)
             out.push_back(hbox({text(std::string("  ") + icon + " ") | color(c), text(n)}));
     };
-    section(i18n::tr("To be installed"), s.toInstall, ic.toInstall, Color::Green);
-    section(i18n::tr("To be removed"), s.toRemove, ic.toRemove, Color::Red);
-    out.push_back(text(i18n::tr("Alt+M: apply   Ctrl+E: cancel")) | dim);
+    section(i18n::tr("To be installed"), s.toInstall, ic.toInstall, T().green);
+    section(i18n::tr("To be removed"), s.toRemove, ic.toRemove, T().red);
+    out.push_back(text(i18n::tr("Alt+M: apply   Ctrl+E: cancel")) | faint());
     return out;
 }
 
@@ -299,20 +349,42 @@ Element tabContent(const ViewState &s, HitBoxes *boxes)
     case HelpTab:   lines = helpLines(); break;
     default:        lines = infoLines(s); break;
     }
+    // Ctrl+F: as linhas com o texto ficam destacadas; a do resultado atual, mais.
+    if (!s.findText.empty())
+        for (int i : findLines(tabText(s), s.findText)) {
+            if (i >= static_cast<int>(lines.size()))
+                break;
+            lines[static_cast<size_t>(i)] = i == s.findMatch ? lines[static_cast<size_t>(i)] | highlight() | bold
+                                                             : lines[static_cast<size_t>(i)] | color(T().yellow);
+        }
     const int count = static_cast<int>(lines.size());
     if (boxes)
         boxes->contentLines = count;
-    // A Saída mostra o fim, a menos que o usuário a role.
+    const int height = s.findOpen ? std::max(1, s.contentHeight - 1) : s.contentHeight;
+    // A Saída mostra o fim, a menos que o usuário a role ou busque nela.
     int first = s.contentScroll;
-    if (s.tab == OutputTab && !s.contentFocused)
-        first = count - s.contentHeight;
+    if (s.tab == OutputTab && !s.contentFocused && !s.findOpen)
+        first = count - height;
     first = std::max(0, std::min(first, count - 1));
     Elements shown(lines.begin() + std::min(first, count), lines.end());
     Element body = vbox(std::move(shown));
     if (s.contentFocused)
         body = hbox({body | flex, text(std::to_string(std::min(first + 1, count)) + "/" + std::to_string(count))
-                                      | dim});
-    return body | size(HEIGHT, EQUAL, s.contentHeight) | yframe;
+                                      | faint()});
+    body = body | size(HEIGHT, EQUAL, height) | yframe;
+    if (!s.findOpen)
+        return body;
+    std::string result;
+    if (s.findText.empty())
+        result = std::string();
+    else if (s.findCount == 0)
+        result = i18n::tr("Not found");
+    else
+        result = std::to_string(s.findMatch < 0 ? 0 : 1 + s.findMatchIndex) + "/" + std::to_string(s.findCount);
+    Element bar = hbox({text(i18n::tr("Find:") + " ") | bold, text(s.findText), text("█") | blink,
+                        text("  " + result) | (s.findCount == 0 && !s.findText.empty() ? color(T().red) : faint()),
+                        filler(), text(i18n::tr("Enter/F3: next  Shift+F3: previous  Esc: close")) | faint()});
+    return vbox({body, bar});
 }
 
 Element statusBar(const ViewState &s)
@@ -325,16 +397,18 @@ Element statusBar(const ViewState &s)
         left = std::string(ic.error) + " " + left;
     Element l = text(left);
     if (s.error)
-        l = l | color(Color::Red);
+        l = l | color(T().red);
     Elements right;
     if (!s.toInstall.empty())
-        right.push_back(text("+" + std::to_string(s.toInstall.size()) + "  ") | color(Color::Green));
+        right.push_back(text("+" + std::to_string(s.toInstall.size()) + "  ") | color(T().green));
     if (!s.toRemove.empty())
-        right.push_back(text("-" + std::to_string(s.toRemove.size()) + "  ") | color(Color::Red));
+        right.push_back(text("-" + std::to_string(s.toRemove.size()) + "  ") | color(T().red));
+    right.push_back(text(i18n::trf("Theme: %1", {T().system ? i18n::tr("System") : std::string(T().label)}) + "  ")
+                    | faint());
     right.push_back(text(i18n::trf("%1 package(s)", {std::to_string(s.totalPackages)})));
     if (s.outdatedCount > 0)
         right.push_back(text("  " + i18n::trf("%1 outdated", {std::to_string(s.outdatedCount)}))
-                        | color(Color::Yellow));
+                        | color(T().yellow));
     Elements all{l | flex};
     for (auto &e : right)
         all.push_back(e);
@@ -344,7 +418,7 @@ Element statusBar(const ViewState &s)
 Element keyBar()
 {
     const auto key = [](const char *k, const std::string &label) {
-        return hbox({text(k) | bold, text(label + " ") | inverted});
+        return hbox({text(k) | bold, text(label + " ") | highlight()});
     };
     // Como no Midnight Commander (e no bectl-tui): teclas de função numeradas.
     return hbox({key("F1", i18n::tr("Help")), text(" "), key("F5", i18n::tr("Refresh")), text(" "),
@@ -357,9 +431,9 @@ Element button(const std::string &label, bool focused, bool danger)
 {
     Element b = text("[ " + label + " ]");
     if (focused)
-        b = b | inverted | bold;
+        b = b | highlight() | bold;
     if (danger && focused)
-        b = b | color(Color::Red);
+        b = b | color(T().red);
     return b;
 }
 
@@ -402,21 +476,21 @@ Element formDialog(const Dialog &d)
             break;
         }
         if (focused && f.kind != DialogField::Text)
-            value = value | inverted;
+            value = value | highlight();
         if (f.kind == DialogField::Check)
             rows.push_back(value);
         else
             rows.push_back(hbox({text(f.label) | size(WIDTH, EQUAL, 28), value}));
         if (!f.hint.empty())
-            rows.push_back(text("    " + f.hint) | dim);
+            rows.push_back(text("    " + f.hint) | faint());
     }
     const int ok = static_cast<int>(d.fields.size());
     rows.push_back(text(""));
     rows.push_back(hbox({filler(), button(i18n::tr("OK"), d.focus == ok, d.danger), text("  "),
                          button(i18n::tr("Cancel"), d.focus == ok + 1, false)}));
-    rows.push_back(text(i18n::tr("Tab / ↑ ↓: field   Space: check   Enter: confirm   Esc: cancel")) | dim);
+    rows.push_back(text(i18n::tr("Tab / ↑ ↓: field   Space: check   ← →: choose   Enter: confirm   Esc: cancel")) | faint());
     Element w = window(text(" " + d.title + " ") | bold, vbox(std::move(rows)));
-    return d.danger ? w | color(Color::Red) : w;
+    return d.danger ? w | color(T().red) : w;
 }
 
 Element confirmDialog(const Dialog &d)
@@ -426,7 +500,7 @@ Element confirmDialog(const Dialog &d)
     rows.push_back(hbox({filler(), button(i18n::tr("Yes"), d.focus == 0, d.danger), text("  "),
                          button(i18n::tr("No"), d.focus == 1, false)}));
     Element w = window(text(" " + d.title + " ") | bold, vbox(std::move(rows)));
-    return d.danger ? w | color(Color::Red) : w;
+    return d.danger ? w | color(T().red) : w;
 }
 
 Element messageDialog(const Dialog &d)
@@ -442,18 +516,18 @@ Element menuDialog(const Dialog &d)
     Elements titles;
     for (size_t m = 0; m < d.menus.size(); ++m) {
         Element t = text(" " + d.menus[m] + " ");
-        titles.push_back(static_cast<int>(m) == d.menu ? t | inverted | bold : t);
+        titles.push_back(static_cast<int>(m) == d.menu ? t | highlight() | bold : t);
     }
     Elements items;
     if (d.menu >= 0 && d.menu < static_cast<int>(d.items.size())) {
         const auto &list = d.items[d.menu];
         for (size_t i = 0; i < list.size(); ++i) {
             if (list[i].first.empty()) {
-                items.push_back(separatorLight());
+                items.push_back(sepLight());
                 continue;
             }
-            Element e = hbox({text(" " + list[i].first) | flex, text("  " + list[i].second + " ") | dim});
-            items.push_back(static_cast<int>(i) == d.item ? e | inverted : e);
+            Element e = hbox({text(" " + list[i].first) | flex, text("  " + list[i].second + " ") | faint()});
+            items.push_back(static_cast<int>(i) == d.item ? e | highlight() : e);
         }
     }
     return vbox({hbox(std::move(titles)), window(text(""), vbox(std::move(items)) | size(WIDTH, GREATER_THAN, 40))});
@@ -466,13 +540,53 @@ Element sortChooser(const ViewState &s)
         const std::string label = i == 0 ? i18n::tr("(pkg order)") : columnTitle(i - 1) + sortMark(s, i - 1);
         Element e = text(" " + label + " ");
         if (i == s.sortChooserIndex)
-            e = e | inverted;
+            e = e | highlight();
         items.push_back(e);
     }
     return window(text(" " + i18n::tr("Sort by") + " "), vbox(std::move(items))) | clear_under | center;
 }
 
 } // namespace
+
+std::vector<std::string> tabText(const ViewState &s)
+{
+    std::vector<std::string> out;
+    switch (s.tab) {
+    case FilesTab:
+        // Só quando a aba mostra a lista (pacote instalado, detalhes carregados).
+        if (s.hasCurrent && s.current.installed && s.detailsReady && s.detailsError.empty()
+            && !s.details.filesTruncated)
+            out = s.details.files;
+        break;
+    case OutputTab:
+        out = s.log;
+        break;
+    case HelpTab:
+        for (const auto &e : helpEntries())
+            out.push_back(e.first.empty() ? e.second : e.first + "  " + e.second);
+        break;
+    default:
+        break;
+    }
+    return out;
+}
+
+std::vector<int> findLines(const std::vector<std::string> &lines, const std::string &needle)
+{
+    const auto lower = [](std::string x) {
+        for (auto &c : x)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return x;
+    };
+    std::vector<int> out;
+    if (needle.empty())
+        return out;
+    const std::string n = lower(needle);
+    for (size_t i = 0; i < lines.size(); ++i)
+        if (lower(lines[i]).find(n) != std::string::npos)
+            out.push_back(static_cast<int>(i));
+    return out;
+}
 
 char tabKey(int tab)
 {
@@ -511,28 +625,37 @@ std::string statusText(const octo::Package &p)
 
 Element render(const ViewState &s, Element filter, HitBoxes *boxes)
 {
+    g_theme = theme(s.themeId);
     const IconSet &ic = icons(s.iconMode);
     const std::string view = s.remoteView ? std::string(ic.remoteView) + " " + i18n::tr("Repository")
                                           : std::string(ic.installedView) + " " + i18n::tr("Installed packages");
     Element main = vbox({
-        hbox({text(" OctoPkg — pkg(8) ") | bold, text("[" + view + "]") | color(Color::Cyan), filler(),
+        hbox({text(" OctoPkg — pkg(8) ") | bold, text("[" + view + "]") | color(T().cyan), filler(),
               text(std::string(ic.filter) + " "), filter | size(WIDTH, EQUAL, 30)}),
-        separator(),
+        sep(),
         table(s, boxes) | flex,
-        separator(),
+        sep(),
         tabs(s, boxes),
         tabContent(s, boxes),
-        separator(),
+        sep(),
         statusBar(s),
         keyBar(),
     });
+    // Fora do tema do sistema, o fundo e o texto do tema valem para a tela
+    // inteira; os diálogos ficam sobre o painel.
+    const auto paint = [](Element e, bool panel) {
+        if (T().system)
+            return e;
+        return e | bgcolor(panel ? T().panel : T().background) | color(T().foreground);
+    };
+    main = paint(main, false);
     if (s.sortChooserOpen)
-        return dbox({main, sortChooser(s)});
+        return dbox({main, paint(sortChooser(s), true)});
     switch (s.dialog.kind) {
-    case Dialog::Form:    return dbox({main, formDialog(s.dialog) | clear_under | center});
-    case Dialog::Confirm: return dbox({main, confirmDialog(s.dialog) | clear_under | center});
-    case Dialog::Message: return dbox({main, messageDialog(s.dialog) | clear_under | center});
-    case Dialog::Menu:    return dbox({main, menuDialog(s.dialog) | clear_under});
+    case Dialog::Form:    return dbox({main, paint(formDialog(s.dialog), true) | clear_under | center});
+    case Dialog::Confirm: return dbox({main, paint(confirmDialog(s.dialog), true) | clear_under | center});
+    case Dialog::Message: return dbox({main, paint(messageDialog(s.dialog), true) | clear_under | center});
+    case Dialog::Menu:    return dbox({main, paint(menuDialog(s.dialog), true) | clear_under});
     case Dialog::None:    break;
     }
     return main;
