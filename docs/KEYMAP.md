@@ -16,6 +16,7 @@ As abas mantêm os números do OctoPkg, de 1 a 6.
 | Aba Informação / Arquivos / Saída / Ajuda | Alt+1 / Alt+2 / Alt+4 / Alt+6 | **1 2 4 6** ou **Alt+1 Alt+2 Alt+4 Alt+6** | v0.1.0 |
 | Ajuda | F1 | **F1** | v0.1.0 |
 | Buscar um pacote na lista | Ctrl+L | **Ctrl+L** ou **/** (<kbd>Esc</kbd> ou <kbd>Enter</kbd> volta à lista) | v0.1.0 |
+| Buscar por nome / por descrição | menu Busca | **F7** alterna; menu Busca (**Alt+B**) | v0.5.0 |
 | Voltar à lista de pacotes | Ctrl+P | **Ctrl+P** ou **Esc** | v0.1.0 |
 | Pacotes instalados / do repositório | Ctrl+I | **i** ou **Alt+I** | v0.1.0 |
 | Aba Informação do pacote selecionado | Enter | **Enter** | v0.1.0 |
@@ -31,7 +32,7 @@ As abas mantêm os números do OctoPkg, de 1 a 6.
 | Instalar as atualizações (pkg upgrade) | Ctrl+U | **Ctrl+U** | v0.2.0 |
 | Limpar o cache (pkg clean) | Ctrl+Shift+C | menu Arquivo (Ctrl+Shift+C chega como Ctrl+C, que encerra o FTXUI) | v0.2.0 |
 | Bloquear / desbloquear | menu de contexto | menu Ações | v0.2.0 |
-| Menus | barra de menus | **F9** ou **Alt+A** (Arquivo), **Alt+C** (Ações), **Alt+J** (Ajuda), como no bectl-tui | v0.2.0 |
+| Menus | barra de menus | **F9** ou **Alt+A** (Arquivo), **Alt+B** (Busca, v0.5.0), **Alt+C** (Ações), **Alt+J** (Ajuda), como no bectl-tui | v0.2.0 |
 | Buscar texto nas abas Arquivos, Saída, Notícias e Ajuda | Ctrl+F (e F3 / Shift+F3 na barra de busca) | **Ctrl+F**; **Enter**/**F3** e **Shift+F3** (ou ↓ ↑) vão ao próximo e ao anterior, **Esc** fecha | v0.3.0 |
 | Preferências (tema, idioma, ícones) | — (o bectl-gui usa Ctrl+,) | **Alt+,** (Ctrl+, não chega pelo terminal), ou Arquivo → Preferências… | v0.3.0 |
 | Próximo tema | — (o bectl-gui usa Ctrl+Shift+T) | **Alt+T** | v0.3.0 |

@@ -64,14 +64,18 @@ SortSpec nextOnHeaderClick(SortSpec current, int column)
     return {-1, true};
 }
 
-std::vector<int> visibleRows(const std::vector<octo::Package> &all, const std::string &filter, SortSpec sort)
+std::vector<int> visibleRows(const std::vector<octo::Package> &all, const std::string &filter, SortSpec sort,
+                             SearchMode mode)
 {
     const std::string needle = lower(filter);
     std::vector<int> rows;
     std::vector<std::string> keys(all.size());   // nomes em minúsculas, calculados uma vez
     for (size_t i = 0; i < all.size(); ++i) {
         keys[i] = lower(all[i].name);
-        if (needle.empty() || keys[i].find(needle) != std::string::npos)
+        bool match = needle.empty() || keys[i].find(needle) != std::string::npos;
+        if (!match && mode == SearchMode::Description)
+            match = lower(all[i].comment).find(needle) != std::string::npos;
+        if (match)
             rows.push_back(static_cast<int>(i));
     }
     if (sort.column < 0 || sort.column >= ColumnCount)

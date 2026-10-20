@@ -162,7 +162,6 @@ const Entry kEntries[] = {
     {"Cancel: clear the marks", "Cancelar: desfazer as marcas", "Cancelar: deshacer las marcas"},
     {"Check updates (pkg update)", "Procurar atualizações (pkg update)", "Buscar actualizaciones (pkg update)"},
     {"Install updates (pkg upgrade)", "Instalar as atualizações (pkg upgrade)", "Instalar las actualizaciones (pkg upgrade)"},
-    {"Menus File, Actions and Help", "Menus Arquivo, Ações e Ajuda", "Menús Archivo, Acciones y Ayuda"},
 
     {"Preferences", "Preferências", "Preferencias"},
     {"Preferences…", "Preferências…", "Preferencias…"},
@@ -195,6 +194,17 @@ const Entry kEntries[] = {
     {"Find text in the Files, Output, News and Help tabs (F3: next, Shift+F3: previous)", "Buscar texto nas abas Arquivos, Saída, Notícias e Ajuda (F3: próximo, Shift+F3: anterior)", "Buscar texto en las pestañas Archivos, Salida, Noticias y Ayuda (F3: siguiente, Shift+F3: anterior)"},
     {"Find works in the Files, Output, News and Help tabs.", "A busca funciona nas abas Arquivos, Saída, Notícias e Ajuda.", "La búsqueda funciona en las pestañas Archivos, Salida, Noticias y Ayuda."},
     {"Tabs Info, Files, Actions, Output, News and Help", "Abas Informação, Arquivos, Ações, Saída, Notícias e Ajuda", "Pestañas Información, Archivos, Acciones, Salida, Noticias y Ayuda"},
+
+    {"Search", "Busca", "Búsqueda"},
+    {"By name", "Por nome", "Por nombre"},
+    {"By description", "Por descrição", "Por descripción"},
+    {"Description", "Descrição", "Descripción"},
+    {"Filter by description…", "Filtrar por descrição…", "Filtrar por descripción…"},
+    {"Search by name.", "Busca por nome.", "Búsqueda por nombre."},
+    {"Search by description (name and comment).", "Busca por descrição (nome e comentário).", "Búsqueda por descripción (nombre y comentario)."},
+    {"Search by name or by description (name and comment)", "Buscar por nome ou por descrição (nome e comentário)", "Buscar por nombre o por descripción (nombre y comentario)"},
+    {"Find text in the tab", "Buscar texto na aba", "Buscar texto en la pestaña"},
+    {"Menus File, Search, Actions and Help", "Menus Arquivo, Busca, Ações e Ajuda", "Menús Archivo, Búsqueda, Acciones y Ayuda"},
 };
 
 const Catalog &catalog(const std::string &loc)

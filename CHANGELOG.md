@@ -5,6 +5,21 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto usa [versionamento semântico](https://semver.org/lang/pt-BR/),
 com tags no formato `vX.Y.Z`.
 
+## [0.5.0] - 2026-10-20
+
+Busca por descrição.
+
+### Adicionado
+- Busca por descrição, como o menu Busca do OctoPkg: o filtro (Ctrl+L ou `/`) procura
+  no nome ou, nesse modo, no nome e no comentário do pacote, sem diferenciar
+  maiúsculas. "editor" encontra o vim, o nano e o emacs. Vale nas visões Instalados e
+  Repositório.
+- **F7** alterna o modo; o menu **Busca** (**Alt+B**, entre Arquivo e Ações) marca o
+  modo atual e também leva ao filtro (Ctrl+L) e à busca na aba (Ctrl+F). O campo de
+  filtro diz o modo ("Filtrar por descrição…"), e o cabeçalho mostra "Descrição:"
+  enquanto ele vale. A escolha fica salva (`search=` no arquivo de configuração).
+- Testes: o filtro nos dois modos, F7, o menu Busca e a escolha relida por uma nova App.
+
 ## [0.4.0] - 2026-10-20
 
 A aba Notícias: agora todas as abas do OctoPkg estão no terminal.
@@ -151,6 +166,7 @@ Primeira versão: somente leitura.
 - Compatível com o FTXUI 6.1.9 e 7.x: a primeira listagem parte de dentro do
   laço de eventos, porque o FTXUI 6 descarta tarefas enviadas antes dele.
 
+[0.5.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/cleberalves40/octopkg-tui/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.2.0...v0.3.0

@@ -27,6 +27,7 @@ const std::string kCtrlQ = "\x11";
 const std::string kCtrlR = "\x12";
 const std::string kCtrlU = "\x15";
 const std::string kAltA = "\x1b" "a";
+const std::string kAltB = "\x1b" "b";
 const std::string kAltC = "\x1b" "c";
 const std::string kAltI = "\x1b" "i";
 const std::string kAltJ = "\x1b" "j";
@@ -37,7 +38,7 @@ const std::string kCtrlF = "\x06";
 const std::string kCtrlG = "\x07";
 const std::string kShiftF3 = "\x1b[1;2R";   // xterm; o FTXUI não tem um evento próprio
 
-enum Menus { FileMenu = 0, ActionsMenu, HelpMenu };
+enum Menus { FileMenu = 0, SearchMenu, ActionsMenu, HelpMenu };
 
 // Linhas fixas da tela: título, separadores, cabeçalho, abas, status e teclas.
 constexpr int kFixedLines = 9;
@@ -111,6 +112,9 @@ App::App(const Options &options)
         m_sort.column = model::Name;
     m_sort.ascending = m_settings.value("sort.order", "asc") != "desc";
     m_themeId = theme(options.theme.empty() ? m_settings.value("theme", "system") : options.theme).id;
+    m_searchMode = m_settings.value("search", "name") == "description" ? model::SearchMode::Description
+                                                                       : model::SearchMode::Name;
+    m_placeholder = filterPlaceholder();
     m_status = i18n::tr("Ready.");
 }
 
@@ -239,10 +243,11 @@ void App::toggleView()
 
 const std::vector<int> &App::rows()
 {
-    if (m_rowsDirty || m_rowsFilter != m_filter || !(m_rowsSort == m_sort)) {
-        m_rows = model::visibleRows(m_all, m_filter, m_sort);
+    if (m_rowsDirty || m_rowsFilter != m_filter || !(m_rowsSort == m_sort) || m_rowsMode != m_searchMode) {
+        m_rows = model::visibleRows(m_all, m_filter, m_sort, m_searchMode);
         m_rowsFilter = m_filter;
         m_rowsSort = m_sort;
+        m_rowsMode = m_searchMode;
         m_rowsDirty = false;
     }
     return m_rows;
@@ -343,6 +348,7 @@ ViewState App::viewState()
             s.detailsError = e->second;
     }
     s.sort = m_sort;
+    s.searchMode = m_searchMode;
     s.remoteView = m_remoteView && m_hasRemote;
     s.tab = m_tab;
     s.contentFocused = m_contentFocused;
@@ -719,6 +725,23 @@ void App::actAbout()
 // Preferências, temas e busca nas abas
 // ---------------------------------------------------------------------------
 
+void App::setSearchMode(model::SearchMode mode)
+{
+    // Como o menu Busca do OctoPkg; a escolha fica salva.
+    m_searchMode = mode;
+    m_placeholder = filterPlaceholder();
+    m_settings.setValue("search", mode == model::SearchMode::Description ? "description" : "name");
+    m_settings.save();
+    m_status = mode == model::SearchMode::Description ? i18n::tr("Search by description (name and comment).")
+                                                      : i18n::tr("Search by name.");
+}
+
+std::string App::filterPlaceholder() const
+{
+    return m_searchMode == model::SearchMode::Description ? i18n::tr("Filter by description…")
+                                                          : i18n::tr("Filter by name…");
+}
+
 void App::nextThemeKey()
 {
     m_themeId = nextTheme(m_themeId).id;
@@ -768,6 +791,7 @@ void App::actPreferences()
                      i18n::initFromEnvironment();
                  else
                      i18n::setLocale(language);
+                 m_placeholder = filterPlaceholder();   // o texto do campo segue o idioma
                  m_settings.setValue("theme", m_themeId);
                  m_settings.setValue("language", language);
                  m_settings.setValue("icons", iconModeName(m_iconMode));
@@ -1093,7 +1117,8 @@ void App::openMenu(int menu)
 {
     m_dialog = Dialog{};
     m_dialog.kind = Dialog::Menu;
-    m_dialog.menus = {i18n::tr("File"), i18n::tr("Actions"), i18n::tr("Help")};
+    m_dialog.menus = {i18n::tr("File"), i18n::tr("Search"), i18n::tr("Actions"), i18n::tr("Help")};
+    const bool byName = m_searchMode == model::SearchMode::Name;
     const auto sep = std::make_pair(std::string(), std::string());
     m_dialog.items = {
         {{i18n::tr("Refresh the package list"), "F5"},
@@ -1108,6 +1133,11 @@ void App::openMenu(int menu)
          {i18n::tr("Next theme"), "Alt+T"},
          sep,
          {i18n::tr("Exit"), "Ctrl+Q"}},
+        {{std::string(byName ? "• " : "  ") + i18n::tr("By name"), "F7"},
+         {std::string(byName ? "  " : "• ") + i18n::tr("By description"), "F7"},
+         sep,
+         {i18n::tr("Find a package in the package list"), "Ctrl+L"},
+         {i18n::tr("Find text in the tab"), "Ctrl+F"}},
         {{i18n::tr("Mark for installation"), "+"},
          {i18n::tr("Mark for removal"), "-"},
          sep,
@@ -1123,6 +1153,9 @@ void App::openMenu(int menu)
          [this] { actUpgrade(); }, [this] { actClean(); },
          [this] { setTab(NewsTab); refreshNews(); }, nullptr, [this] { actPreferences(); },
          [this] { nextThemeKey(); }, nullptr, [this] { quit(); }},
+        {[this] { setSearchMode(model::SearchMode::Name); },
+         [this] { setSearchMode(model::SearchMode::Description); }, nullptr,
+         [this] { m_filterMode = true; m_contentFocused = false; }, [this] { openFind(); }},
         {[this] { markInstall(); }, [this] { markRemove(); }, nullptr, [this] { actApply(); },
          [this] { clearMarks(); }, nullptr, [this] { actLock(true); }, [this] { actLock(false); }},
         {[this] { setTab(HelpTab); }, [this] { actAbout(); }},
@@ -1354,8 +1387,17 @@ bool App::handleEvent(const Event &event)
         openMenu(FileMenu);
         return true;
     }
+    if (raw == kAltB) {
+        openMenu(SearchMenu);
+        return true;
+    }
     if (raw == kAltC) {
         openMenu(ActionsMenu);
+        return true;
+    }
+    if (event == Event::F7) {
+        setSearchMode(m_searchMode == model::SearchMode::Name ? model::SearchMode::Description
+                                                              : model::SearchMode::Name);
         return true;
     }
     if (raw == kAltJ) {
@@ -1460,7 +1502,8 @@ int App::run()
 
     InputOption option;
     option.multiline = false;
-    m_input = Input(&m_filter, i18n::tr("Filter by name…"), option);
+    // O texto de ajuda do campo acompanha o modo de busca (F7).
+    m_input = Input(&m_filter, &m_placeholder, option);
 
     auto renderer = Renderer(m_input, [this] {
         // A primeira listagem parte da primeira renderização, já dentro do
@@ -1472,7 +1515,7 @@ int App::run()
         }
         const ViewState state = viewState();
         Element filter = m_filterMode ? m_input->Render()
-                                      : (m_filter.empty() ? text(i18n::tr("Filter by name…")) | dim
+                                      : (m_filter.empty() ? text(m_placeholder) | dim
                                                           : text(m_filter));
         Element e = render(state, filter, &m_boxes);
         requestDetails();

@@ -6,7 +6,8 @@ it also works over SSH.
 Features:
 - Installed and repository package views, with OctoPkg's states
   (installed, dependency, outdated, newer, locked, not installed)
-- Details and file lists, search, and sorting by any column
+- Details and file lists, search by name or description, and sorting by
+  any column
 - Mark packages to install (+) or remove (-), preview the transaction
   (pkg install -n, pkg remove -n) and apply it
 - Upgrade, database sync, cache cleaning, lock and unlock

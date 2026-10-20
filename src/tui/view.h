@@ -68,6 +68,7 @@ struct ViewState {
     octo::Details details;
     std::string detailsError;
     model::SortSpec sort;
+    model::SearchMode searchMode = model::SearchMode::Name;
     bool remoteView = false;
     int tab = InfoTab;
     bool contentFocused = false;       // Tab: as setas rolam a aba

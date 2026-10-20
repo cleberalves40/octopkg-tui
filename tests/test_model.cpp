@@ -132,3 +132,21 @@ TEST_CASE("ordena 40 mil pacotes", "[model][performance]")
     CHECK(all[static_cast<size_t>(rows.front())].name == "pkg0");
     CHECK(model::visibleRows(all, "pkg3999", {model::Version, false}).size() == 11);
 }
+
+TEST_CASE("busca por descrição: nome ou comentário", "[model][search]")
+{
+    std::vector<octo::Package> all = sample();
+    all[0].comment = "The Z shell";
+    all[1].comment = "Command line tool for transferring data with URLs";
+    all[2].comment = "Package manager";
+    all[3].comment = "Improved version of the vi editor";
+    using model::SearchMode;
+    // Por nome, "editor" não acha nada; por descrição, acha o vim.
+    CHECK(model::visibleRows(all, "editor", {}, SearchMode::Name).empty());
+    CHECK(names(all, model::visibleRows(all, "EDITOR", {}, SearchMode::Description)) == Names{"vim"});
+    // O nome continua valendo no modo descrição.
+    CHECK(names(all, model::visibleRows(all, "zsh", {}, SearchMode::Description)) == Names{"zsh"});
+    // "a" está nos comentários do curl e do pkg; não em "The Z shell" nem no do vim.
+    CHECK(names(all, model::visibleRows(all, "a", {model::Name, true}, SearchMode::Description))
+          == Names{"Curl", "pkg"});
+}
