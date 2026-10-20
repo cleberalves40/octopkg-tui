@@ -214,6 +214,11 @@ const Entry kEntries[] = {
     {"Filter by category…", "Filtrar por categoria…", "Filtrar por categoría…"},
     {"Enter: choose   a-z: jump   Esc: close", "Enter: escolher   a-z: saltar   Esc: fechar", "Enter: elegir   a-z: saltar   Esc: cerrar"},
     {"Filter by category (the port's origin: editors, www, devel...)", "Filtrar por categoria (a origem do port: editors, www, devel...)", "Filtrar por categoría (el origen del port: editors, www, devel...)"},
+
+    {"Package list maximized (F11: tabs).", "Lista de pacotes maximizada (F11: abas).", "Lista de paquetes maximizada (F11: pestañas)."},
+    {"Tabs maximized (F11: back to both).", "Abas maximizadas (F11: volta às duas).", "Pestañas maximizadas (F11: vuelve a las dos)."},
+    {"Package list and tabs.", "Lista de pacotes e abas.", "Lista de paquetes y pestañas."},
+    {"Maximize the package list, then the tabs, then back to both", "Maximizar a lista de pacotes, depois as abas, depois voltar às duas", "Maximizar la lista de paquetes, luego las pestañas, luego volver a las dos"},
 };
 
 const Catalog &catalog(const std::string &loc)

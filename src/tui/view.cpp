@@ -296,6 +296,7 @@ std::vector<std::pair<std::string, std::string>> helpEntries()
         {"F1", i18n::tr("Show this help page")},
         {"Enter", i18n::tr("Show the Info tab of the selected package")},
         {"Tab", i18n::tr("Scroll the tab with the arrow keys")},
+        {"F11  Alt+Z", i18n::tr("Maximize the package list, then the tabs, then back to both")},
         {"Ctrl+Q  F10  q", i18n::tr("Exit")},
         {"", i18n::tr("Click a column header to sort")},
     };
@@ -744,21 +745,33 @@ Element render(const ViewState &s, Element filter, HitBoxes *boxes)
     const IconSet &ic = icons(s.iconMode);
     const std::string view = s.remoteView ? std::string(ic.remoteView) + " " + i18n::tr("Repository")
                                           : std::string(ic.installedView) + " " + i18n::tr("Installed packages");
-    Element main = vbox({
-        hbox({text(" OctoPkg — pkg(8) ") | bold, text("[" + view + (s.category.empty() ? std::string() : " · " + s.category) + "]") | color(T().cyan), filler(),
+    Elements body;
+    body.push_back(hbox({text(" OctoPkg — pkg(8) ") | bold, text("[" + view + (s.category.empty() ? std::string() : " · " + s.category) + "]") | color(T().cyan), filler(),
               text(std::string(ic.filter) + " "),
               s.searchMode == model::SearchMode::Description ? text(i18n::tr("Description") + ": ") | faint()
                                                              : text(""),
-              filter | size(WIDTH, EQUAL, 30)}),
-        sep(),
-        table(s, boxes) | flex,
-        sep(),
-        tabs(s, boxes),
-        tabContent(s, boxes),
-        sep(),
-        statusBar(s),
-        keyBar(),
-    });
+              filter | size(WIDTH, EQUAL, 30)}));
+    body.push_back(sep());
+    // F11: só a lista, só as abas, ou as duas.
+    if (s.layout != Layout::TabsOnly)
+        body.push_back(table(s, boxes) | flex);
+    if (s.layout == Layout::Normal)
+        body.push_back(sep());
+    if (s.layout != Layout::ListOnly) {
+        body.push_back(tabs(s, boxes));
+        Element content = tabContent(s, boxes);
+        body.push_back(s.layout == Layout::TabsOnly ? content | flex : content);
+    }
+    if (boxes && s.layout == Layout::ListOnly)
+        boxes->tabs = {};   // sem abas na tela: nenhum clique cai nelas
+    if (boxes && s.layout == Layout::TabsOnly) {
+        boxes->rows.clear();
+        boxes->header = {};
+    }
+    body.push_back(sep());
+    body.push_back(statusBar(s));
+    body.push_back(keyBar());
+    Element main = vbox(std::move(body));
     // Fora do tema do sistema, o fundo e o texto do tema valem para a tela
     // inteira; os diálogos ficam sobre o painel.
     const auto paint = [](Element e, bool panel) {

@@ -91,6 +91,7 @@ private:
     void actPreferences();
     void nextThemeKey();
     void setSearchMode(model::SearchMode mode);
+    void nextLayout();
     void openCategoryChooser();
     void setCategory(const std::string &category);
     bool handleCategoryEvent(const ftxui::Event &event);
@@ -173,6 +174,7 @@ private:
     int m_tableHeight = 1000;
     int m_contentHeight = 12;
     int m_contentWidth = 96;
+    Layout m_layout = Layout::Normal;
     int m_tab = InfoTab;
     bool m_contentFocused = false;
     int m_contentScroll = 0;

@@ -5,6 +5,19 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto usa [versionamento semântico](https://semver.org/lang/pt-BR/),
 com tags no formato `vX.Y.Z`.
 
+## [0.7.0] - 2026-10-20
+
+Maximizar a lista ou as abas.
+
+### Adicionado
+- **F11** (ou **Alt+Z**, para os terminais que tomam o F11 para tela cheia) passa por
+  três disposições, como o F10 e o F11 do OctoPkg numa tecla só: só a lista de
+  pacotes, em toda a altura; só as abas, com as setas rolando a aba sem precisar do
+  Tab; e as duas, como antes. A barra de status diz qual está valendo; o F10 continua
+  saindo, como no mc e no htop.
+- Testes: as três disposições desenhadas, as setas movendo a seleção ou rolando a aba
+  conforme a disposição, e a volta às duas.
+
 ## [0.6.0] - 2026-10-20
 
 Filtro por categoria.
@@ -181,6 +194,7 @@ Primeira versão: somente leitura.
 - Compatível com o FTXUI 6.1.9 e 7.x: a primeira listagem parte de dentro do
   laço de eventos, porque o FTXUI 6 descarta tarefas enviadas antes dele.
 
+[0.7.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.3.1...v0.4.0

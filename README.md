@@ -38,8 +38,9 @@ instalar e **x** para remover.)
 
 ## Estado
 
-**v0.6.0.** Lista os pacotes instalados e os dos repositórios, com detalhes e
-arquivos, busca por nome ou por descrição (**F7**) e filtra por categoria (**F8**); marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da
+**v0.7.0.** Lista os pacotes instalados e os dos repositórios, com detalhes e
+arquivos, busca por nome ou por descrição (**F7**), filtra por categoria (**F8**) e
+maximiza a lista ou as abas (**F11**); marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da
 transação e a executa (**Alt+M**), instala as atualizações (**Ctrl+U**), sincroniza o
 banco (**Ctrl+K**), limpa o cache e bloqueia ou desbloqueia pacotes, com os comandos
 do OctoPkg e, se o sistema usa Boot Environments, a opção de criar um antes. Tem os
@@ -145,6 +146,7 @@ cores de 24 bits; num terminal com menos, o FTXUI as aproxima.
 | <kbd>1</kbd>…<kbd>6</kbd> / <kbd>Alt+1</kbd>…<kbd>Alt+6</kbd> | Abas Informação, Arquivos, Ações, Saída, Notícias e Ajuda, com os números do OctoPkg (<kbd>F1</kbd>: Ajuda) |
 | <kbd>Enter</kbd> | Aba Informação do pacote selecionado |
 | <kbd>Tab</kbd> | Rolar a aba com as setas (de novo, ou <kbd>Esc</kbd>, volta à lista) |
+| <kbd>F11</kbd> / <kbd>Alt+Z</kbd> | Maximizar a lista, depois as abas, depois voltar às duas |
 | <kbd>Ctrl+Q</kbd> / <kbd>F10</kbd> / <kbd>q</kbd> | Sair (não durante uma operação) |
 
 O mapa completo, com a correspondência para os atalhos do OctoPkg, está em

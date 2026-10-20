@@ -34,6 +34,7 @@ const std::string kAltI = "\x1b" "i";
 const std::string kAltJ = "\x1b" "j";
 const std::string kAltM = "\x1b" "m";
 const std::string kAltT = "\x1b" "t";
+const std::string kAltZ = "\x1b" "z";
 const std::string kAltComma = "\x1b" ",";
 const std::string kCtrlF = "\x06";
 const std::string kCtrlG = "\x07";
@@ -265,8 +266,20 @@ void App::layout()
     // Sobra espaço para o indicador de posição ("12/345") da aba com foco.
     m_contentWidth = std::max(20, size.dimx - 9);
     const int free = std::max(2, height - kFixedLines);
-    m_contentHeight = std::max(3, std::min(16, free * 2 / 5));
-    m_tableHeight = std::max(1, free - m_contentHeight);
+    switch (m_layout) {
+    case Layout::ListOnly:   // sem a barra de abas, a aba e um separador
+        m_tableHeight = std::max(1, free + 2);
+        m_contentHeight = 3;
+        break;
+    case Layout::TabsOnly:   // sem o cabeçalho, a lista e um separador
+        m_contentHeight = std::max(3, free + 2);
+        m_tableHeight = 1;
+        break;
+    default:
+        m_contentHeight = std::max(3, std::min(16, free * 2 / 5));
+        m_tableHeight = std::max(1, free - m_contentHeight);
+        break;
+    }
 }
 
 std::string App::currentDetailsKey()
@@ -362,6 +375,10 @@ ViewState App::viewState()
     s.contentScroll = m_contentScroll;
     s.contentHeight = m_contentHeight;
     s.contentWidth = m_contentWidth;
+    s.layout = m_layout;
+    // Só com as abas na tela, as setas rolam a aba.
+    if (m_layout == Layout::TabsOnly)
+        s.contentFocused = true;
     s.log = m_log;
     s.status = m_status;
     s.busy = m_busy;
@@ -405,7 +422,7 @@ void App::setSort(model::SortSpec sort)
 
 void App::move(int delta)
 {
-    if (m_contentFocused) {
+    if (m_contentFocused || m_layout == Layout::TabsOnly) {
         scrollContent(delta);
         return;
     }
@@ -741,6 +758,25 @@ void App::setSearchMode(model::SearchMode mode)
     m_settings.save();
     m_status = mode == model::SearchMode::Description ? i18n::tr("Search by description (name and comment).")
                                                       : i18n::tr("Search by name.");
+}
+
+void App::nextLayout()
+{
+    // Como o F10 (lista) e o F11 (abas) do OctoPkg, numa tecla só.
+    switch (m_layout) {
+    case Layout::Normal:
+        m_layout = Layout::ListOnly;
+        m_status = i18n::tr("Package list maximized (F11: tabs).");
+        break;
+    case Layout::ListOnly:
+        m_layout = Layout::TabsOnly;
+        m_status = i18n::tr("Tabs maximized (F11: back to both).");
+        break;
+    default:
+        m_layout = Layout::Normal;
+        m_status = i18n::tr("Package list and tabs.");
+        break;
+    }
 }
 
 void App::openCategoryChooser()
@@ -1461,6 +1497,10 @@ bool App::handleEvent(const Event &event)
         openMenu(ActionsMenu);
         return true;
     }
+    if (event == Event::F11 || raw == kAltZ) {
+        nextLayout();
+        return true;
+    }
     if (event == Event::F8) {
         openCategoryChooser();
         return true;
@@ -1549,7 +1589,7 @@ bool App::handleEvent(const Event &event)
         m_contentFocused = false;
         return true;
     }
-    const int page = m_contentFocused ? m_contentHeight : m_tableHeight;
+    const int page = (m_contentFocused || m_layout == Layout::TabsOnly) ? m_contentHeight : m_tableHeight;
     if (event == Event::ArrowUp || event == Event::Character('k'))
         move(-1);
     else if (event == Event::ArrowDown || event == Event::Character('j'))
