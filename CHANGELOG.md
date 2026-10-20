@@ -5,6 +5,21 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto usa [versionamento semântico](https://semver.org/lang/pt-BR/),
 com tags no formato `vX.Y.Z`.
 
+## [0.3.1] - 2026-10-20
+
+Empacotamento: o port FreeBSD.
+
+### Adicionado
+- Port em `freebsd/`, para `ports-mgmt/octopkg-tui` (a categoria do OctoPkg): o
+  FTXUI como dependência de biblioteca, a licença GPLv2+ e um `pkg-message` (gerado
+  com `SUB_FILES`) com o `doas.conf` de exemplo e a fonte Nerd para os ícones.
+- `ci/freebsd-port.sh`: validação do port nos quatro jobs FreeBSD, como no bectl-gui
+  (`portlint -A`, `stage-qa` e `check-plist` com `DEVELOPER=yes`, o pacote, a
+  instalação, o `--version` e o binário instalado num pseudo-terminal).
+- `docs/RELEASING.md`: o processo de versão e os passos para enviar o port à árvore
+  oficial do FreeBSD.
+- CI: a versão do `CMakeLists.txt` e a do `freebsd/Makefile` precisam ser iguais.
+
 ## [0.3.0] - 2026-10-20
 
 Temas, Preferências e busca nas abas.
@@ -111,6 +126,7 @@ Primeira versão: somente leitura.
 - Compatível com o FTXUI 6.1.9 e 7.x: a primeira listagem parte de dentro do
   laço de eventos, porque o FTXUI 6 descarta tarefas enviadas antes dele.
 
+[0.3.1]: https://github.com/cleberalves40/octopkg-tui/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cleberalves40/octopkg-tui/releases/tag/v0.1.0

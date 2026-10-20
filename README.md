@@ -38,13 +38,13 @@ instalar e **x** para remover.)
 
 ## Estado
 
-**v0.3.0.** Lista os pacotes instalados e os dos repositórios, com detalhes e
+**v0.3.1.** Lista os pacotes instalados e os dos repositórios, com detalhes e
 arquivos; marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da
 transação e a executa (**Alt+M**), instala as atualizações (**Ctrl+U**), sincroniza o
 banco (**Ctrl+K**), limpa o cache e bloqueia ou desbloqueia pacotes, com os comandos
 do OctoPkg e, se o sistema usa Boot Environments, a opção de criar um antes. Tem os
 15 temas do bectl-gui (**Alt+T**), Preferências (**Alt+,**) e a busca dentro das abas
-(**Ctrl+F**). Veja o [CHANGELOG](CHANGELOG.md).
+(**Ctrl+F**). Tem um port FreeBSD validado no CI. Veja o [CHANGELOG](CHANGELOG.md).
 
 ## Requisitos (FreeBSD)
 
@@ -85,6 +85,20 @@ usuário.)
 
 Para usar o sudo: `--elevator=sudo`, ou `elevator=sudo` em
 `~/.config/octopkg-tui/config`.
+
+## Instalação pelo port
+
+O port fica em `freebsd/` e é validado no CI; enquanto ele não está na árvore oficial:
+
+```sh
+mkdir -p /usr/ports/ports-mgmt/octopkg-tui/files
+cp freebsd/Makefile freebsd/pkg-descr /usr/ports/ports-mgmt/octopkg-tui/
+cp freebsd/pkg-message.in /usr/ports/ports-mgmt/octopkg-tui/files/
+cd /usr/ports/ports-mgmt/octopkg-tui && make makesum install clean
+```
+
+O envio à árvore oficial, como `ports-mgmt/octopkg-tui`, está em
+[docs/RELEASING.md](docs/RELEASING.md).
 
 ## Compilação
 
@@ -167,7 +181,8 @@ sh tests/tui-smoke.sh build      # a interface num pseudo-terminal, com um pkg f
   interface, num pseudo-terminal.
 
 O CI roda no Ubuntu (com ASan e UBSan) e no FreeBSD 14.5 e 15.1, em amd64 e aarch64,
-incluindo a interface num pseudo-terminal.
+incluindo a interface num pseudo-terminal e a validação do port
+(`ci/freebsd-port.sh`: portlint, stage-qa, pacote e o binário instalado).
 
 ## Licença
 

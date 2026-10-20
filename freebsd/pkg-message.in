@@ -1,0 +1,22 @@
+[
+{ type: install
+  message: <<EOM
+octopkg-tui runs as a regular user and raises privileges only for the
+package operations, through doas(1) (the default) or sudo(8):
+
+  pkg install doas
+
+and, in %%LOCALBASE%%/etc/doas.conf, for example:
+
+  permit persist :wheel cmd %%LOCALBASE%%/sbin/pkg
+  permit persist :wheel cmd /sbin/bectl
+
+To use sudo instead, run octopkg-tui --elevator=sudo, or add
+"elevator=sudo" to ~/.config/octopkg-tui/config.
+
+For the default Nerd Font icons, set the terminal font to a Nerd Font,
+such as JetBrainsMono Nerd Font Mono (pkg install nerd-fonts-jetbrainsmono),
+or use --icons=unicode or --icons=ascii.
+EOM
+}
+]

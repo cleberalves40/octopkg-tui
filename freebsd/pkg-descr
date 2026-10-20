@@ -1,0 +1,16 @@
+octopkg-tui is a terminal user interface for pkg(8), the FreeBSD package
+manager. It is the terminal counterpart of OctoPkg, with the same tabs and
+shortcuts whenever the terminal allows, and it needs neither Qt nor X11, so
+it also works over SSH.
+
+Features:
+- Installed and repository package views, with OctoPkg's states
+  (installed, dependency, outdated, newer, locked, not installed)
+- Details and file lists, search, and sorting by any column
+- Mark packages to install (+) or remove (-), preview the transaction
+  (pkg install -n, pkg remove -n) and apply it
+- Upgrade, database sync, cache cleaning, lock and unlock
+- Optional boot environment (bectl) before each transaction
+- Privileges through doas or sudo, only for the operations
+- 15 color themes, Nerd Font, Unicode or ASCII icons, and English,
+  Brazilian Portuguese and Spanish translations
