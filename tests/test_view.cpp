@@ -989,3 +989,93 @@ TEST_CASE("menu Busca, com o modo atual marcado", "[app][search][menu]")
     tui::App again(o);
     CHECK(again.viewState().searchMode == model::SearchMode::Description);
 }
+
+// --- v0.6.0: filtro por categoria ---
+
+namespace {
+
+tui::Listing categorized()
+{
+    tui::Listing l;
+    const char *items[][2] = {{"vim", "editors/vim"},   {"nano", "editors/nano"}, {"curl", "ftp/curl"},
+                              {"wget", "ftp/wget"},     {"zsh", "shells/zsh"},    {"bash", "shells/bash"},
+                              {"pkg", "ports-mgmt/pkg"}};
+    for (const auto &i : items) {
+        octo::Package p = installed(i[0], "1.0", 1024);
+        p.origin = i[1];
+        l.installed.push_back(p);
+    }
+    return l;
+}
+
+} // namespace
+
+TEST_CASE("F8 escolhe a categoria, que combina com o filtro", "[app][category]")
+{
+    i18n::setLocale("en_US");
+    AppFixture f;
+    f.app.applyListing(categorized());
+    f.app.handleEvent(Event::F8);
+    tui::ViewState s = f.app.viewState();
+    REQUIRE(s.categoryChooserOpen);
+    CHECK(s.categoryIndex == 0);   // (todas), a atual
+    CHECK(s.categories.size() == 4);
+    std::string out = draw(s);
+    for (const char *t : {" Category ", "• (all categories)", "editors", "ftp", "ports-mgmt", "shells", "1/5"})
+        CHECK_INFO(out, t);
+
+    f.app.handleEvent(Event::Character('s'));   // salta para shells
+    CHECK(f.app.viewState().categoryIndex == 4);
+    f.app.handleEvent(Event::Character('e'));   // e para editors
+    CHECK(f.app.viewState().categoryIndex == 1);
+    f.app.handleEvent(Event::Return);
+    s = f.app.viewState();
+    CHECK_FALSE(s.categoryChooserOpen);
+    CHECK(s.category == "editors");
+    CHECK(s.status == "Category: editors");
+    CHECK(s.rowCount == 2);
+    CHECK(draw(s).find("[# Installed packages · editors]") != std::string::npos);
+
+    f.app.filterText() = "na";
+    CHECK(f.app.viewState().rowCount == 1);   // nano; "na" no nome, só em editors
+    f.app.filterText().clear();
+
+    // De novo: a atual vem marcada e em foco; Home e Enter voltam a todas.
+    f.app.handleEvent(Event::F8);
+    s = f.app.viewState();
+    CHECK(s.categoryIndex == 1);
+    CHECK(draw(s).find("• editors") != std::string::npos);
+    f.app.handleEvent(Event::Home);
+    f.app.handleEvent(Event::Return);
+    CHECK(f.app.viewState().category.empty());
+    CHECK(f.app.viewState().rowCount == 7);
+}
+
+TEST_CASE("categorias pelo menu Busca, e sem pacotes não quebra", "[app][category][menu]")
+{
+    i18n::setLocale("en_US");
+    AppFixture f;
+    f.app.applyListing(categorized());
+    f.app.handleEvent(Event::Special("\x1b" "b"));   // menu Busca
+    for (int i = 0; i < 2; ++i)                     // Por nome, Por descrição, (sep), Filtrar por categoria
+        f.app.handleEvent(Event::ArrowDown);
+    f.app.handleEvent(Event::Return);
+    REQUIRE(f.app.viewState().categoryChooserOpen);
+    f.app.handleEvent(Event::End);
+    f.app.handleEvent(Event::Return);
+    CHECK(f.app.viewState().category == "shells");
+    f.app.handleEvent(Event::Special("\x1b" "b"));
+    for (int i = 0; i < 3; ++i)                     // … Todas as categorias
+        f.app.handleEvent(Event::ArrowDown);
+    f.app.handleEvent(Event::Return);
+    CHECK(f.app.viewState().category.empty());
+
+    // Sem pacotes, a lista de categorias fica vazia.
+    AppFixture empty;
+    empty.app.applyListing(tui::Listing{});
+    empty.app.handleEvent(Event::F8);
+    REQUIRE(empty.app.viewState().categoryChooserOpen);
+    empty.app.handleEvent(Event::Character('x'));   // nada para saltar
+    empty.app.handleEvent(Event::Escape);
+    CHECK_FALSE(empty.app.viewState().categoryChooserOpen);
+}

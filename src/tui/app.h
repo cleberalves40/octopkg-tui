@@ -91,6 +91,9 @@ private:
     void actPreferences();
     void nextThemeKey();
     void setSearchMode(model::SearchMode mode);
+    void openCategoryChooser();
+    void setCategory(const std::string &category);
+    bool handleCategoryEvent(const ftxui::Event &event);
     std::string filterPlaceholder() const;
     void openFind();
     void loadNews();
@@ -153,12 +156,17 @@ private:
     std::string m_rowsFilter;
     model::SortSpec m_rowsSort{-2, true};
     model::SearchMode m_rowsMode = model::SearchMode::Name;
+    std::string m_rowsCategory;
     bool m_rowsDirty = true;
 
     std::string m_filter;
     std::string m_placeholder;                 // do campo de filtro, conforme o modo de busca
     model::SortSpec m_sort;
     model::SearchMode m_searchMode = model::SearchMode::Name;
+    std::string m_category;                    // F8; vazio: todas
+    bool m_categoryChooser = false;
+    std::vector<std::pair<std::string, int>> m_categoryList;
+    int m_categoryIndex = 0;
     std::string m_selectedName;
     std::string m_shownName;                   // pacote da última tela, para zerar a rolagem
     int m_offset = 0;

@@ -205,6 +205,15 @@ const Entry kEntries[] = {
     {"Search by name or by description (name and comment)", "Buscar por nome ou por descrição (nome e comentário)", "Buscar por nombre o por descripción (nombre y comentario)"},
     {"Find text in the tab", "Buscar texto na aba", "Buscar texto en la pestaña"},
     {"Menus File, Search, Actions and Help", "Menus Arquivo, Busca, Ações e Ajuda", "Menús Archivo, Búsqueda, Acciones y Ayuda"},
+
+    {"Category", "Categoria", "Categoría"},
+    {"Category: %1", "Categoria: %1", "Categoría: %1"},
+    {"All categories", "Todas as categorias", "Todas las categorías"},
+    {"All categories.", "Todas as categorias.", "Todas las categorías."},
+    {"(all categories)", "(todas as categorias)", "(todas las categorías)"},
+    {"Filter by category…", "Filtrar por categoria…", "Filtrar por categoría…"},
+    {"Enter: choose   a-z: jump   Esc: close", "Enter: escolher   a-z: saltar   Esc: fechar", "Enter: elegir   a-z: saltar   Esc: cerrar"},
+    {"Filter by category (the port's origin: editors, www, devel...)", "Filtrar por categoria (a origem do port: editors, www, devel...)", "Filtrar por categoría (el origen del port: editors, www, devel...)"},
 };
 
 const Catalog &catalog(const std::string &loc)

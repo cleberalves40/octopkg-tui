@@ -4,6 +4,7 @@
 #include "theme.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <ctime>
 #include <ftxui/component/component.hpp>
@@ -243,8 +244,10 @@ void App::toggleView()
 
 const std::vector<int> &App::rows()
 {
-    if (m_rowsDirty || m_rowsFilter != m_filter || !(m_rowsSort == m_sort) || m_rowsMode != m_searchMode) {
-        m_rows = model::visibleRows(m_all, m_filter, m_sort, m_searchMode);
+    if (m_rowsDirty || m_rowsFilter != m_filter || !(m_rowsSort == m_sort) || m_rowsMode != m_searchMode
+        || m_rowsCategory != m_category) {
+        m_rows = model::visibleRows(m_all, m_filter, m_sort, m_searchMode, m_category);
+        m_rowsCategory = m_category;
         m_rowsFilter = m_filter;
         m_rowsSort = m_sort;
         m_rowsMode = m_searchMode;
@@ -349,6 +352,10 @@ ViewState App::viewState()
     }
     s.sort = m_sort;
     s.searchMode = m_searchMode;
+    s.category = m_category;
+    s.categoryChooserOpen = m_categoryChooser;
+    s.categories = m_categoryList;
+    s.categoryIndex = m_categoryIndex;
     s.remoteView = m_remoteView && m_hasRemote;
     s.tab = m_tab;
     s.contentFocused = m_contentFocused;
@@ -734,6 +741,59 @@ void App::setSearchMode(model::SearchMode mode)
     m_settings.save();
     m_status = mode == model::SearchMode::Description ? i18n::tr("Search by description (name and comment).")
                                                       : i18n::tr("Search by name.");
+}
+
+void App::openCategoryChooser()
+{
+    // As categorias da visão atual (Instalados ou Repositório), com a atual em foco.
+    m_categoryList = model::categories(m_all);
+    m_categoryIndex = 0;
+    for (size_t i = 0; i < m_categoryList.size(); ++i)
+        if (m_categoryList[i].first == m_category)
+            m_categoryIndex = static_cast<int>(i) + 1;
+    m_categoryChooser = true;
+}
+
+void App::setCategory(const std::string &category)
+{
+    m_category = category;
+    m_status = category.empty() ? i18n::tr("All categories.") : i18n::trf("Category: %1", {category});
+}
+
+bool App::handleCategoryEvent(const Event &event)
+{
+    const int last = static_cast<int>(m_categoryList.size());
+    if (event == Event::Escape || event == Event::F8) {
+        m_categoryChooser = false;
+    } else if (event == Event::ArrowUp) {
+        m_categoryIndex = std::max(0, m_categoryIndex - 1);
+    } else if (event == Event::ArrowDown) {
+        m_categoryIndex = std::min(last, m_categoryIndex + 1);
+    } else if (event == Event::PageUp) {
+        m_categoryIndex = std::max(0, m_categoryIndex - 15);
+    } else if (event == Event::PageDown) {
+        m_categoryIndex = std::min(last, m_categoryIndex + 15);
+    } else if (event == Event::Home) {
+        m_categoryIndex = 0;
+    } else if (event == Event::End) {
+        m_categoryIndex = last;
+    } else if (event == Event::Return) {
+        setCategory(m_categoryIndex == 0 ? std::string()
+                                         : m_categoryList[static_cast<size_t>(m_categoryIndex - 1)].first);
+        m_categoryChooser = false;
+    } else if (last > 0 && event.is_character() && event.character().size() == 1) {
+        // Uma letra pula para a próxima categoria que começa com ela.
+        const char c = static_cast<char>(std::tolower(static_cast<unsigned char>(event.character()[0])));
+        for (int step = 1; step <= last; ++step) {
+            const int i = (m_categoryIndex - 1 + step) % last;
+            if (!m_categoryList[static_cast<size_t>(i)].first.empty()
+                && m_categoryList[static_cast<size_t>(i)].first[0] == c) {
+                m_categoryIndex = i + 1;
+                break;
+            }
+        }
+    }
+    return true;
 }
 
 std::string App::filterPlaceholder() const
@@ -1136,6 +1196,9 @@ void App::openMenu(int menu)
         {{std::string(byName ? "• " : "  ") + i18n::tr("By name"), "F7"},
          {std::string(byName ? "  " : "• ") + i18n::tr("By description"), "F7"},
          sep,
+         {i18n::tr("Filter by category…"), "F8"},
+         {i18n::tr("All categories"), ""},
+         sep,
          {i18n::tr("Find a package in the package list"), "Ctrl+L"},
          {i18n::tr("Find text in the tab"), "Ctrl+F"}},
         {{i18n::tr("Mark for installation"), "+"},
@@ -1155,6 +1218,7 @@ void App::openMenu(int menu)
          [this] { nextThemeKey(); }, nullptr, [this] { quit(); }},
         {[this] { setSearchMode(model::SearchMode::Name); },
          [this] { setSearchMode(model::SearchMode::Description); }, nullptr,
+         [this] { openCategoryChooser(); }, [this] { setCategory(std::string()); }, nullptr,
          [this] { m_filterMode = true; m_contentFocused = false; }, [this] { openFind(); }},
         {[this] { markInstall(); }, [this] { markRemove(); }, nullptr, [this] { actApply(); },
          [this] { clearMarks(); }, nullptr, [this] { actLock(true); }, [this] { actLock(false); }},
@@ -1323,6 +1387,8 @@ bool App::handleEvent(const Event &event)
 
     if (m_findOpen)
         return handleFindEvent(event);
+    if (m_categoryChooser)
+        return handleCategoryEvent(event);
 
     // Escolha da coluna de ordenação (F6).
     if (m_sortChooser) {
@@ -1393,6 +1459,10 @@ bool App::handleEvent(const Event &event)
     }
     if (raw == kAltC) {
         openMenu(ActionsMenu);
+        return true;
+    }
+    if (event == Event::F8) {
+        openCategoryChooser();
         return true;
     }
     if (event == Event::F7) {

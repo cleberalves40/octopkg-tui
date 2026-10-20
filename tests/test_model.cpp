@@ -150,3 +150,25 @@ TEST_CASE("busca por descrição: nome ou comentário", "[model][search]")
     CHECK(names(all, model::visibleRows(all, "a", {model::Name, true}, SearchMode::Description))
           == Names{"Curl", "pkg"});
 }
+
+TEST_CASE("categoria do port e o filtro por ela", "[model][category]")
+{
+    std::vector<octo::Package> all = sample();
+    all[0].origin = "shells/zsh";
+    all[1].origin = "ftp/curl";
+    all[2].origin = "ports-mgmt/pkg";
+    all[3].origin = "editors/vim";
+    octo::Package nano = pkg("nano", "8.2", 1, 1, Status::NotInstalled);
+    nano.origin = "editors/nano";
+    nano.comment = "Nano's ANOther editor";
+    all.push_back(nano);
+    CHECK(model::category(all[3]) == "editors");
+    CHECK(model::category(octo::Package{}).empty());
+    using Cats = std::vector<std::pair<std::string, int>>;
+    CHECK(model::categories(all) == Cats{{"editors", 2}, {"ftp", 1}, {"ports-mgmt", 1}, {"shells", 1}});
+    using model::SearchMode;
+    CHECK(names(all, model::visibleRows(all, "", {}, SearchMode::Name, "editors")) == Names{"nano", "vim"});
+    CHECK(names(all, model::visibleRows(all, "v", {}, SearchMode::Name, "editors")) == Names{"vim"});
+    CHECK(names(all, model::visibleRows(all, "another", {}, SearchMode::Description, "editors")) == Names{"nano"});
+    CHECK(model::visibleRows(all, "", {}, SearchMode::Name, "www").empty());
+}

@@ -17,6 +17,7 @@ As abas mantêm os números do OctoPkg, de 1 a 6.
 | Ajuda | F1 | **F1** | v0.1.0 |
 | Buscar um pacote na lista | Ctrl+L | **Ctrl+L** ou **/** (<kbd>Esc</kbd> ou <kbd>Enter</kbd> volta à lista) | v0.1.0 |
 | Buscar por nome / por descrição | menu Busca | **F7** alterna; menu Busca (**Alt+B**) | v0.5.0 |
+| Filtrar por categoria | — (os grupos do OctoPkg, F9, não existem no pkg) | **F8**; menu Busca | v0.6.0 |
 | Voltar à lista de pacotes | Ctrl+P | **Ctrl+P** ou **Esc** | v0.1.0 |
 | Pacotes instalados / do repositório | Ctrl+I | **i** ou **Alt+I** | v0.1.0 |
 | Aba Informação do pacote selecionado | Enter | **Enter** | v0.1.0 |

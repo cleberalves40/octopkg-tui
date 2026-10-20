@@ -277,6 +277,7 @@ std::vector<std::pair<std::string, std::string>> helpEntries()
         {"↑ ↓ PgUp PgDn Home End", i18n::tr("Move")},
         {"Ctrl+L  /", i18n::tr("Find a package in the package list")},
         {"F7", i18n::tr("Search by name or by description (name and comment)")},
+        {"F8", i18n::tr("Filter by category (the port's origin: editors, www, devel...)")},
         {"Esc  Enter  Ctrl+P", i18n::tr("Go back to the package list")},
         {"i  Alt+I", i18n::tr("Switch between installed and repository packages")},
         {"+  Insert", i18n::tr("Mark the selected package for installation")},
@@ -616,6 +617,33 @@ Element menuDialog(const Dialog &d)
     return vbox({hbox(std::move(titles)), window(text(""), vbox(std::move(items)) | size(WIDTH, GREATER_THAN, 40))});
 }
 
+// F8: lista rolável das categorias, com a atual marcada.
+Element categoryChooser(const ViewState &s)
+{
+    constexpr int kVisible = 16;
+    const int total = static_cast<int>(s.categories.size()) + 1;
+    const int first = std::max(0, std::min(s.categoryIndex - kVisible / 2, total - kVisible));
+    int all = 0;
+    for (const auto &c : s.categories)
+        all += c.second;
+    Elements items;
+    for (int i = first; i < total && i < first + kVisible; ++i) {
+        const bool isAll = i == 0;
+        const std::string name = isAll ? i18n::tr("(all categories)") : s.categories[static_cast<size_t>(i - 1)].first;
+        const int count = isAll ? all : s.categories[static_cast<size_t>(i - 1)].second;
+        const bool current = isAll ? s.category.empty() : s.category == name;
+        Element e = hbox({text(std::string(current ? " • " : "   ") + name) | flex,
+                          text(" " + std::to_string(count) + " ") | faint()});
+        if (i == s.categoryIndex)
+            e = e | highlight();
+        items.push_back(e);
+    }
+    const std::string pos = std::to_string(s.categoryIndex + 1) + "/" + std::to_string(total);
+    items.push_back(text(i18n::tr("Enter: choose   a-z: jump   Esc: close") + "   " + pos) | faint());
+    return window(text(" " + i18n::tr("Category") + " "), vbox(std::move(items)) | size(WIDTH, GREATER_THAN, 36))
+           | clear_under | center;
+}
+
 Element sortChooser(const ViewState &s)
 {
     Elements items;
@@ -717,7 +745,7 @@ Element render(const ViewState &s, Element filter, HitBoxes *boxes)
     const std::string view = s.remoteView ? std::string(ic.remoteView) + " " + i18n::tr("Repository")
                                           : std::string(ic.installedView) + " " + i18n::tr("Installed packages");
     Element main = vbox({
-        hbox({text(" OctoPkg — pkg(8) ") | bold, text("[" + view + "]") | color(T().cyan), filler(),
+        hbox({text(" OctoPkg — pkg(8) ") | bold, text("[" + view + (s.category.empty() ? std::string() : " · " + s.category) + "]") | color(T().cyan), filler(),
               text(std::string(ic.filter) + " "),
               s.searchMode == model::SearchMode::Description ? text(i18n::tr("Description") + ": ") | faint()
                                                              : text(""),
@@ -741,6 +769,8 @@ Element render(const ViewState &s, Element filter, HitBoxes *boxes)
     main = paint(main, false);
     if (s.sortChooserOpen)
         return dbox({main, paint(sortChooser(s), true)});
+    if (s.categoryChooserOpen)
+        return dbox({main, paint(categoryChooser(s), true)});
     switch (s.dialog.kind) {
     case Dialog::Form:    return dbox({main, paint(formDialog(s.dialog), true) | clear_under | center});
     case Dialog::Confirm: return dbox({main, paint(confirmDialog(s.dialog), true) | clear_under | center});
