@@ -7,7 +7,9 @@
 # dependências de build), a partir da raiz do código-fonte.
 #
 # O distfile é gerado do commit em teste, com o nome e o prefixo que o
-# USE_GITHUB espera: a tag da versão só existe depois do merge.
+# USE_GITHUB espera, e o distinfo é refeito para ele: a tag da versão só
+# existe depois do merge. O freebsd/distinfo do repositório, o da última tag
+# publicada, é conferido à parte (ci/port-distinfo.sh, no job Ubuntu).
 
 set -eu
 
@@ -78,7 +80,9 @@ pkg add "$pkgfile"
 pkg info -l octopkg-tui
 bin=/usr/local/bin/octopkg-tui
 [ -x "$bin" ] || fail "octopkg-tui não foi instalado"
-version=$(sed -n 's/^DISTVERSION=[[:space:]]*//p' freebsd/Makefile)
+# O binário tem a versão do código em teste (o DISTVERSION pode ser a da
+# última tag publicada).
+version=$(sed -n 's/^project(octopkg_tui VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
 [ "$("$bin" --version)" = "octopkg-tui $version" ] || fail "--version não mostrou $version"
 
 # O binário do pacote, num pseudo-terminal: lista os pacotes, carrega os

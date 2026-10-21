@@ -23,8 +23,13 @@ jobs:
         cmake_ver=$(sed -n 's/^project(octopkg_tui VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
         port_ver=$(sed -n 's/^DISTVERSION=[[:space:]]*//p' freebsd/Makefile)
         echo "CMakeLists.txt: $cmake_ver / freebsd/Makefile: $port_ver"
-        test -n "$cmake_ver" && test "$cmake_ver" = "$port_ver"
+        test -n "$cmake_ver" && test -n "$port_ver"
         grep -q "^## \[$cmake_ver\]" CHANGELOG.md
+        # O port acompanha a última tag publicada (o distinfo não pode vir no
+        # próprio release): pode estar atrás do CMakeLists.txt, nunca à frente,
+        # e o freebsd/distinfo tem de bater com o tarball da tag no GitHub.
+        test "$(printf '%s\n%s\n' "$port_ver" "$cmake_ver" | sort -V | tail -1)" = "$cmake_ver"
+        sh ci/port-distinfo.sh "$port_ver" --check
 
     - name: Install Dependencies
       run: |

@@ -5,6 +5,26 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto usa [versionamento semântico](https://semver.org/lang/pt-BR/),
 com tags no formato `vX.Y.Z`.
 
+## [0.7.2] - 2026-10-21
+
+Port pronto para compilar: o `distinfo`.
+
+### Adicionado
+- `freebsd/distinfo`, com o SHA256 e o tamanho do tarball que o GitHub serve para a
+  tag: quem compila pelo port do repositório já não precisa do `make makesum`.
+- `ci/port-distinfo.sh`: aponta o port para uma versão publicada (o `DISTVERSION` e o
+  `distinfo`, calculado do tarball da tag) e, com `--check`, confere se o
+  `freebsd/distinfo` bate com ele.
+
+### Alterado
+- O port do repositório acompanha a **última tag publicada**. O `distinfo` não pode
+  vir no próprio release, porque o tarball da tag contém o `freebsd/distinfo` e o
+  checksum mudaria ao incluí-lo; depois de cada tag, um PR curto atualiza o port
+  (veja `docs/RELEASING.md`). Nesta versão, o port compila a v0.7.1.
+- CI: o `DISTVERSION` pode estar atrás da versão do `CMakeLists.txt`, nunca à frente,
+  e o `freebsd/distinfo` tem de bater com o tarball da tag no GitHub. A validação do
+  port confere o `--version` com a versão do `CMakeLists.txt`.
+
 ## [0.7.1] - 2026-10-20
 
 Homologação no FreeBSD 16.0-CURRENT.
@@ -215,6 +235,7 @@ Primeira versão: somente leitura.
 - Compatível com o FTXUI 6.1.9 e 7.x: a primeira listagem parte de dentro do
   laço de eventos, porque o FTXUI 6 descarta tarefas enviadas antes dele.
 
+[0.7.2]: https://github.com/cleberalves40/octopkg-tui/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/cleberalves40/octopkg-tui/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/cleberalves40/octopkg-tui/compare/v0.5.0...v0.6.0

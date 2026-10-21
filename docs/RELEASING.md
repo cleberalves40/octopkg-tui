@@ -9,19 +9,27 @@ O projeto segue o [versionamento semântico](https://semver.org/lang/pt-BR/), co
 - **minor** (`v0.4.0`): funcionalidades novas, compatíveis;
 - **major** (`v1.0.0`): mudanças incompatíveis.
 
-A versão fica em dois arquivos, e o CI reprova se eles divergirem ou se o
-`CHANGELOG.md` não tiver a entrada correspondente:
+A versão do programa fica no `CMakeLists.txt`, e a do port no `freebsd/Makefile` e no
+`freebsd/distinfo`. O port acompanha a **última tag publicada**: o `distinfo` não pode
+vir no próprio release, porque o tarball da tag contém o `freebsd/distinfo` e o
+checksum mudaria ao incluí-lo.
 
 | Arquivo | Campo |
 |:---|:---|
 | `CMakeLists.txt` | `project(octopkg_tui VERSION X.Y.Z ...)`: a fonte da versão exibida no `--version` e no Sobre |
-| `freebsd/Makefile` | `DISTVERSION=` |
+| `freebsd/Makefile` | `DISTVERSION=`: a última tag publicada |
+| `freebsd/distinfo` | SHA256 e tamanho do tarball dessa tag no GitHub |
+
+O CI reprova se o `CHANGELOG.md` não tiver a entrada da versão do `CMakeLists.txt`, se o
+`DISTVERSION` estiver à frente dela, ou se o `freebsd/distinfo` não bater com o
+tarball da tag (`ci/port-distinfo.sh --check`).
 
 ## Publicando uma versão
 
-1. Num branch `release-X.Y.Z`, altere os dois arquivos e registre as mudanças no
-   `CHANGELOG.md`, no formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
-   com o link de comparação no fim do arquivo.
+1. Num branch `release-X.Y.Z`, altere a versão no `CMakeLists.txt` e registre as
+   mudanças no `CHANGELOG.md`, no formato
+   [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), com o link de
+   comparação no fim do arquivo. O `freebsd/` fica como está.
 2. Abra o pull request. O CI precisa passar no Ubuntu (com os testes também sob ASan e
    UBSan, e a interface num pseudo-terminal contra o FTXUI 6.1.9), nos quatro jobs
    FreeBSD Tier 1 (14.5 e 15.1, amd64 e aarch64), que incluem a integração com o
@@ -38,10 +46,18 @@ A versão fica em dois arquivos, e o CI reprova se eles divergirem ou se o
    git push origin vX.Y.Z
    ```
 
+5. Com a tag publicada, atualize o port num branch `port-X.Y.Z` e abra o pull request
+   ("port: vX.Y.Z"); é só o port, sem versão nova do programa:
+
+   ```sh
+   sh ci/port-distinfo.sh X.Y.Z          # DISTVERSION e distinfo da tag
+   sh ci/port-distinfo.sh X.Y.Z --check  # o mesmo que o CI confere
+   ```
+
 ## O port
 
-O port fica em `freebsd/` (`Makefile`, `pkg-descr` e `pkg-message.in`, com o exemplo de
-`doas.conf`, que vai para `files/` no port) e é validado a cada pull request por `ci/freebsd-port.sh`, nas quatro
+O port fica em `freebsd/` (`Makefile`, `distinfo`, `pkg-descr` e `pkg-message.in`, com
+o exemplo de `doas.conf`, que vai para `files/` no port) e é validado a cada pull request por `ci/freebsd-port.sh`, nas quatro
 combinações de release e arquitetura:
 
 - `portlint -A`, com o port numa árvore de ports em git, como antes de um commit na
@@ -59,15 +75,10 @@ e o prefixo que o `USE_GITHUB` espera.
 Para propô-lo na árvore oficial, como `ports-mgmt/octopkg-tui` (a categoria do
 OctoPkg), depois de publicar a tag:
 
-1. Numa máquina FreeBSD com a árvore de ports atualizada, copie `Makefile` e
-   `pkg-descr` de `freebsd/` para `/usr/ports/ports-mgmt/octopkg-tui/` e
-   `pkg-message.in` para `files/`, e gere o `distinfo` a partir do tarball da tag
-   publicada:
-
-   ```sh
-   cd /usr/ports/ports-mgmt/octopkg-tui
-   make makesum
-   ```
+1. Numa máquina FreeBSD com a árvore de ports atualizada, copie `Makefile`,
+   `distinfo` e `pkg-descr` de `freebsd/` para `/usr/ports/ports-mgmt/octopkg-tui/` e
+   `pkg-message.in` para `files/`. O `distinfo` já é o da tag publicada; para
+   conferir, `make checksum`.
 
 2. Teste num ambiente limpo, nas arquiteturas que puder (o CI não usa o `poudriere`):
 
