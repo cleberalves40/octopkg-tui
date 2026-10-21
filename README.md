@@ -39,7 +39,7 @@ instalar e **x** para remover.)
 
 ## Estado
 
-**v0.7.1.** Lista os pacotes instalados e os dos repositórios, com detalhes e
+**v0.7.2.** Lista os pacotes instalados e os dos repositórios, com detalhes e
 arquivos, busca por nome ou por descrição (**F7**), filtra por categoria (**F8**) e
 maximiza a lista ou as abas (**F11**); marca pacotes para instalar (**+**) e remover (**-**), mostra a prévia da
 transação e a executa (**Alt+M**), instala as atualizações (**Ctrl+U**), sincroniza o
@@ -91,14 +91,19 @@ Para usar o sudo: `--elevator=sudo`, ou `elevator=sudo` em
 
 ## Instalação pelo port
 
-O port fica em `freebsd/` e é validado no CI; enquanto ele não está na árvore oficial:
+O port fica em `freebsd/` e é validado no CI. Ele compila a **última versão
+publicada** (a tag no GitHub), com o `distinfo` dela; enquanto ele não está na
+árvore oficial, a partir de um clone deste repositório, numa máquina FreeBSD com a
+árvore de ports em `/usr/ports`:
 
 ```sh
 mkdir -p /usr/ports/ports-mgmt/octopkg-tui/files
-cp freebsd/Makefile freebsd/pkg-descr /usr/ports/ports-mgmt/octopkg-tui/
+cp freebsd/Makefile freebsd/pkg-descr freebsd/distinfo /usr/ports/ports-mgmt/octopkg-tui/
 cp freebsd/pkg-message.in /usr/ports/ports-mgmt/octopkg-tui/files/
-cd /usr/ports/ports-mgmt/octopkg-tui && make makesum install clean
+cd /usr/ports/ports-mgmt/octopkg-tui && make install clean
 ```
+
+Sem a árvore de ports (`/usr/ports/Mk`), o caminho é a compilação abaixo.
 
 O envio à árvore oficial, como `ports-mgmt/octopkg-tui`, está em
 [docs/RELEASING.md](docs/RELEASING.md).
