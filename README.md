@@ -1,5 +1,7 @@
 # octopkg-tui
 
+[**Português**](README.md) | [English](README.en.md)
+
 [![Build & Test](https://github.com/cleberalves40/octopkg-tui/actions/workflows/build.yml/badge.svg)](https://github.com/cleberalves40/octopkg-tui/actions/workflows/build.yml)
 [![FreeBSD 16-CURRENT](https://github.com/cleberalves40/octopkg-tui/actions/workflows/freebsd16.yml/badge.svg)](https://github.com/cleberalves40/octopkg-tui/actions/workflows/freebsd16.yml)
 [![License: GPL v2+](https://img.shields.io/badge/License-GPL%20v2%2B-blue.svg)](LICENSE)

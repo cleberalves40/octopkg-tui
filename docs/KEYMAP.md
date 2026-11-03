@@ -1,5 +1,7 @@
 # Atalhos: OctoPkg → octopkg-tui
 
+[**Português**](KEYMAP.md) | [English](KEYMAP.en.md)
+
 O octopkg-tui mantém os atalhos do OctoPkg 0.4.2 sempre que o terminal os entrega ao
 programa. Alguns não chegam, ou chegam iguais a outra tecla, e ganham uma alternativa:
 
